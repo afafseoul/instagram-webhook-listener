@@ -1,10 +1,8 @@
 from flask import Flask, request
-import requests
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = "your-verify-token"  # <-- À changer avec ton propre token
-MAKE_WEBHOOK_URL = "https://hook.make.com/xxxxxxxxxxxxxxx"  # <-- À remplacer par ton lien Make
+VERIFY_TOKEN = "afafsecret123"
 
 @app.route("/", methods=["GET", "POST"])
 def webhook():
@@ -13,11 +11,9 @@ def webhook():
             return request.args.get("hub.challenge")
         else:
             return "Verification token mismatch", 403
-
     if request.method == "POST":
         data = request.json
         print("Received webhook:", data)
-        requests.post(MAKE_WEBHOOK_URL, json=data)
         return "OK", 200
 
 if __name__ == "__main__":
