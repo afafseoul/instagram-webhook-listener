@@ -10,7 +10,7 @@ app.secret_key = 'your_secret_key_here'
 CLIENT_DB = 'clients.json'
 OAUTH_CLIENT_ID = '2883439835182858'
 OAUTH_REDIRECT_URI = 'https://instagram-webhook-listener.onrender.com/oauth-callback'
-OAUTH_CLIENT_SECRET = 'YOUR_CLIENT_SECRET_HERE'
+OAUTH_CLIENT_SECRET = os.getenv("OAUTH_CLIENT_SECRET")
 OAUTH_SCOPES = 'pages_show_list,instagram_basic,instagram_manage_comments,pages_read_engagement'
 
 def init_db():
