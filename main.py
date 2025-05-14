@@ -73,7 +73,7 @@ def register_client():
 @app.route('/connect-instagram')
 def connect_instagram():
     if 'email' not in session:
-        return 'Accès refusé. Veuillez d'abord payer.', 403
+        return "Accès refusé. Veuillez d'abord payer.", 403
 
     oauth_url = (
         f"https://www.facebook.com/v19.0/dialog/oauth?"
