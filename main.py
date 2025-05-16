@@ -25,7 +25,7 @@ def oauth_callback():
     params = {
         "client_id": "2883439835182858",
         "redirect_uri": "https://instagram-webhook-listener.onrender.com/oauth-callback",
-        "client_secret": os.environ.get("FB_CLIENT_SECRET"),
+        "client_secret": os.environ.get("OAUTH_CLIENT_SECRET"),
         "code": code
     }
     res = requests.get(token_url, params=params)
