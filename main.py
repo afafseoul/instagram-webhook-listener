@@ -123,5 +123,24 @@ def linked_pages():
     </html>
     """)
 
+@app.route('/webhook', methods=['GET', 'POST'])
+def webhook():
+    VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
+    MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+
+    if request.method == 'GET':
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            return challenge, 200
+        return "Erreur de vérification", 403
+
+    if request.method == 'POST':
+        data = request.json
+        if MAKE_WEBHOOK_URL:
+            requests.post(MAKE_WEBHOOK_URL, json=data)
+        return "OK", 200
+
 if __name__ == '__main__':
     app.run(debug=True)
