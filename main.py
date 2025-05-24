@@ -3,10 +3,11 @@ import requests
 import json
 import os
 from datetime import datetime, timedelta
+from threading import Thread
+import time
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "supersecret")
-CLIENT_DB = "clients.json"
 
 @app.route('/')
 def index():
@@ -20,7 +21,6 @@ def oauth_callback():
     if not code:
         return "Erreur : aucun code reçu", 400
 
-    # Échanger le code contre un access_token Meta
     token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
     params = {
         "client_id": "2883439835182858",
@@ -35,7 +35,6 @@ def oauth_callback():
     if not access_token:
         return f"Erreur d'obtention du token : {data}", 400
 
-    # Récupérer la page Facebook associée
     page_name = "Non détectée"
     try:
         page_req = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={
@@ -46,34 +45,22 @@ def oauth_callback():
     except:
         pass
 
-    # Exemple d'infos associées — à adapter selon ton système réel
     email = session.get("email", "test@ece-cook.com")
     plan = session.get("plan", "Free")
     preferences = session.get("preferences", "Style par défaut")
     date_start = datetime.now().isoformat()
     date_end = (datetime.now() + timedelta(days=30)).isoformat()
 
-    # Sauvegarde dans le JSON local
     payload = {
         "email": email,
         "plan": plan,
         "preferences": preferences,
         "date_start": date_start,
         "date_end": date_end,
-        "page_name": page_name
+        "page_name": page_name,
+        "type": "oauth",
+        "access_token": access_token
     }
-
-    try:
-        with open(CLIENT_DB, 'r') as f:
-            clients = json.load(f)
-    except FileNotFoundError:
-        clients = []
-
-    clients = [c for c in clients if c['email'] != email]  # éviter les doublons
-    clients.append(payload)
-
-    with open(CLIENT_DB, 'w') as f:
-        json.dump(clients, f, indent=2)
 
     return render_template_string(f"""
     <html>
@@ -89,36 +76,6 @@ def oauth_callback():
           <li><strong>Du :</strong> {date_start[:10]} au {date_end[:10]}</li>
         </ul>
         <a href="https://cozy-maamoul-92d86f.netlify.app/dashboard.html">↩️ Retour au dashboard</a>
-      </body>
-    </html>
-    """)
-
-@app.route('/linked-pages')
-def linked_pages():
-    email = session.get("email", "test@ece-cook.com")
-
-    try:
-        with open(CLIENT_DB, 'r') as f:
-            clients = json.load(f)
-    except FileNotFoundError:
-        return "Aucune donnée client enregistrée.", 404
-
-    client = next((c for c in clients if c['email'] == email), None)
-    if not client:
-        return "Client introuvable.", 404
-
-    return render_template_string(f"""
-    <html>
-      <head><title>Pages liées</title></head>
-      <body style="font-family: sans-serif; padding: 2em;">
-        <h2>📄 Détail de la page liée</h2>
-        <ul>
-          <li><strong>Email :</strong> {client['email']}</li>
-          <li><strong>Plan :</strong> {client['plan']}</li>
-          <li><strong>Préférences :</strong> {client['preferences']}</li>
-          <li><strong>Page Facebook :</strong> {client['page_name']}</li>
-          <li><strong>Du :</strong> {client['date_start'][:10]} au {client['date_end'][:10]}</li>
-        </ul>
       </body>
     </html>
     """)
@@ -141,6 +98,54 @@ def webhook():
         if MAKE_WEBHOOK_URL:
             requests.post(MAKE_WEBHOOK_URL, json=data)
         return "OK", 200
+
+def check_instagram_posts():
+    SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
+    MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+    last_seen = {}
+
+    while True:
+        try:
+            businesses = requests.get("https://graph.facebook.com/v19.0/me/businesses", params={
+                "access_token": SYSTEM_TOKEN
+            }).json().get("data", [])
+
+            for biz in businesses:
+                business_id = biz["id"]
+                pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/client_pages", params={
+                    "access_token": SYSTEM_TOKEN
+                }).json().get("data", [])
+
+                for page in pages:
+                    page_id = page["id"]
+                    ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
+                        "fields": "instagram_business_account",
+                        "access_token": SYSTEM_TOKEN
+                    }).json()
+
+                    ig_account = ig_resp.get("instagram_business_account")
+                    if ig_account:
+                        ig_id = ig_account["id"]
+                        url = f"https://graph.facebook.com/v19.0/{ig_id}/media"
+                        params = {
+                            "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
+                            "access_token": SYSTEM_TOKEN
+                        }
+                        res = requests.get(url, params=params)
+                        media = res.json().get("data", [])
+                        if not media:
+                            continue
+                        latest_post = media[0]
+                        if ig_id not in last_seen or last_seen[ig_id] != latest_post["id"]:
+                            last_seen[ig_id] = latest_post["id"]
+                            if MAKE_WEBHOOK_URL:
+                                requests.post(MAKE_WEBHOOK_URL, json=latest_post)
+        except Exception as e:
+            print(f"Erreur Instagram check: {e}")
+
+        time.sleep(60)
+
+Thread(target=check_instagram_posts).start()
 
 if __name__ == '__main__':
     app.run(debug=True)
