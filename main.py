@@ -13,73 +13,6 @@ app.secret_key = os.environ.get("FLASK_SECRET", "supersecret")
 def index():
     return '🏠 API Commanda opérationnelle.'
 
-@app.route('/oauth-callback')
-def oauth_callback():
-    code = request.args.get('code')
-    state = request.args.get('state')
-
-    if not code:
-        return "Erreur : aucun code reçu", 400
-
-    token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
-    params = {
-        "client_id": "2883439835182858",
-        "redirect_uri": "https://instagram-webhook-listener.onrender.com/oauth-callback",
-        "client_secret": os.environ.get("OAUTH_CLIENT_SECRET"),
-        "code": code
-    }
-    res = requests.get(token_url, params=params)
-    data = res.json()
-
-    access_token = data.get("access_token")
-    if not access_token:
-        return f"Erreur d'obtention du token : {data}", 400
-
-    page_name = "Non détectée"
-    try:
-        page_req = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={
-            "access_token": access_token
-        })
-        page_data = page_req.json()
-        page_name = page_data.get("data", [{}])[0].get("name", "Inconnue")
-    except:
-        pass
-
-    email = session.get("email", "test@ece-cook.com")
-    plan = session.get("plan", "Free")
-    preferences = session.get("preferences", "Style par défaut")
-    date_start = datetime.now().isoformat()
-    date_end = (datetime.now() + timedelta(days=30)).isoformat()
-
-    payload = {
-        "email": email,
-        "plan": plan,
-        "preferences": preferences,
-        "date_start": date_start,
-        "date_end": date_end,
-        "page_name": page_name,
-        "type": "oauth",
-        "access_token": access_token
-    }
-
-    return render_template_string(f"""
-    <html>
-      <head><title>Connexion réussie</title></head>
-      <body style="font-family: sans-serif; padding: 2em;">
-        <h2>✅ Connexion Meta réussie</h2>
-        <p>L’automatisation est maintenant activée pour :</p>
-        <ul>
-          <li><strong>Email :</strong> {email}</li>
-          <li><strong>Plan :</strong> {plan}</li>
-          <li><strong>Préférences :</strong> {preferences}</li>
-          <li><strong>Page Facebook :</strong> {page_name}</li>
-          <li><strong>Du :</strong> {date_start[:10]} au {date_end[:10]}</li>
-        </ul>
-        <a href="https://cozy-maamoul-92d86f.netlify.app/dashboard.html">↩️ Retour au dashboard</a>
-      </body>
-    </html>
-    """)
-
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
@@ -145,6 +78,7 @@ def check_instagram_posts():
 
         time.sleep(60)
 
+# 🔁 Démarre le scanner en arrière-plan
 Thread(target=check_instagram_posts).start()
 
 if __name__ == '__main__':
