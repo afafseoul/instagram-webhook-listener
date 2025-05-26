@@ -37,42 +37,39 @@ def check_instagram_posts():
     MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
     last_seen = {}
 
+    # ✅ Business ID fixe (car /me/businesses ne marche pas avec un token système)
+    business_id = "9878394526928338"  # ID de ton Business Manager
+
     while True:
         try:
-            businesses = requests.get("https://graph.facebook.com/v19.0/me/businesses", params={
+            pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/client_pages", params={
                 "access_token": SYSTEM_TOKEN
             }).json().get("data", [])
 
-            for biz in businesses:
-                business_id = biz["id"]
-                pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/client_pages", params={
+            for page in pages:
+                page_id = page["id"]
+                ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
+                    "fields": "instagram_business_account",
                     "access_token": SYSTEM_TOKEN
-                }).json().get("data", [])
+                }).json()
 
-                for page in pages:
-                    page_id = page["id"]
-                    ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
-                        "fields": "instagram_business_account",
+                ig_account = ig_resp.get("instagram_business_account")
+                if ig_account:
+                    ig_id = ig_account["id"]
+                    url = f"https://graph.facebook.com/v19.0/{ig_id}/media"
+                    params = {
+                        "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
                         "access_token": SYSTEM_TOKEN
-                    }).json()
-
-                    ig_account = ig_resp.get("instagram_business_account")
-                    if ig_account:
-                        ig_id = ig_account["id"]
-                        url = f"https://graph.facebook.com/v19.0/{ig_id}/media"
-                        params = {
-                            "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
-                            "access_token": SYSTEM_TOKEN
-                        }
-                        res = requests.get(url, params=params)
-                        media = res.json().get("data", [])
-                        if not media:
-                            continue
-                        latest_post = media[0]
-                        if ig_id not in last_seen or last_seen[ig_id] != latest_post["id"]:
-                            last_seen[ig_id] = latest_post["id"]
-                            if MAKE_WEBHOOK_URL:
-                                requests.post(MAKE_WEBHOOK_URL, json=latest_post)
+                    }
+                    res = requests.get(url, params=params)
+                    media = res.json().get("data", [])
+                    if not media:
+                        continue
+                    latest_post = media[0]
+                    if ig_id not in last_seen or last_seen[ig_id] != latest_post["id"]:
+                        last_seen[ig_id] = latest_post["id"]
+                        if MAKE_WEBHOOK_URL:
+                            requests.post(MAKE_WEBHOOK_URL, json=latest_post)
         except Exception as e:
             print(f"Erreur Instagram check: {e}")
 
