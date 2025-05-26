@@ -42,6 +42,7 @@ def check_instagram_posts():
 
     while True:
         try:
+            print("🔄 Vérification des nouveaux posts Instagram...")
             pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/client_pages", params={
                 "access_token": SYSTEM_TOKEN
             }).json().get("data", [])
@@ -66,12 +67,14 @@ def check_instagram_posts():
                     if not media:
                         continue
                     latest_post = media[0]
+                    print(f"📸 Dernier post ID: {latest_post['id']} pour IG: {ig_id}")
                     if ig_id not in last_seen or last_seen[ig_id] != latest_post["id"]:
                         last_seen[ig_id] = latest_post["id"]
                         if MAKE_WEBHOOK_URL:
+                            print(f"📤 Nouveau post détecté. Envoi au webhook → {MAKE_WEBHOOK_URL}")
                             requests.post(MAKE_WEBHOOK_URL, json=latest_post)
         except Exception as e:
-            print(f"Erreur Instagram check: {e}")
+            print(f"❌ Erreur Instagram check: {e}")
 
         time.sleep(60)
 
