@@ -43,6 +43,8 @@ def check_instagram_posts():
         "585442894651616"   # Page Gestion J-E (pour aeesha_slh)
     ]
 
+    initialized = False
+
     while True:
         try:
             print("🔁 Boucle détection post IG")
@@ -71,11 +73,19 @@ def check_instagram_posts():
                     continue
 
                 latest = media[0]
+
+                if not initialized:
+                    print(f"⏳ Initialisation - enregistrement sans envoi du post {latest['id']}")
+                    last_seen[ig_id] = latest["id"]
+                    continue
+
                 if last_seen.get(ig_id) != latest["id"]:
                     last_seen[ig_id] = latest["id"]
                     print(f"🆕 Nouveau post: {latest['id']} pour {ig_id}")
                     if MAKE_WEBHOOK_URL:
                         requests.post(MAKE_WEBHOOK_URL, json=latest)
+
+            initialized = True
 
         except Exception as e:
             print(f"💥 Erreur dans boucle IG: {str(e)}")
