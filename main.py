@@ -40,7 +40,7 @@ def check_instagram_posts():
     # 🔒 Ici on met les ID des pages Facebook manuellement
     page_ids = [
         "500108869863121",  # Page Gestion J-C
-        "476928322180823"   # Page Gestion J-E (pour aeesha_slh)
+        "585442894651616"   # Page Gestion J-E (pour aeesha_slh)
     ]
 
     while True:
