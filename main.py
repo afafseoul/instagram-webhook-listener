@@ -41,19 +41,22 @@ def webhook():
 def check_instagram_posts():
     SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
     MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
-    last_seen = {}
-
-    # ⚠️ Forçage de la page connue
-    pages = [{"id": "500108869863121"}]  # Page Gestion J-C
     business_id = "9878394526928338"
+    last_seen = {}
 
     while True:
         try:
             print("🔁 Début boucle de vérification des posts IG")
 
+            pages_resp = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/accounts", params={
+                "access_token": SYSTEM_TOKEN
+            })
+            print(f"📦 Réponse /accounts: {pages_resp.text}")
+            pages = pages_resp.json().get("data", [])
+
             for page in pages:
                 page_id = page.get("id")
-                print(f"➡️ Page forcée utilisée: {page_id}")
+                print(f"➡️ Page trouvée: {page_id}")
 
                 ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
                     "fields": "instagram_business_account",
@@ -65,6 +68,7 @@ def check_instagram_posts():
                 if ig_account:
                     ig_id = ig_account.get("id")
                     print(f"✅ Compte IG détecté: {ig_id}")
+
                     media_res = requests.get(f"https://graph.facebook.com/v19.0/{ig_id}/media", params={
                         "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
                         "access_token": SYSTEM_TOKEN
