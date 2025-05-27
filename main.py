@@ -93,8 +93,8 @@ def check_instagram_posts():
         except Exception as e:
             print(f"💥 Erreur dans check_instagram_posts: {str(e)}")
 
-        print("⏳ Pause de 60s avant nouvelle vérification")
-        time.sleep(60)
+        print("⏳ Pause de 40s avant nouvelle vérification")
+        time.sleep(40)
 
 # 🔁 Démarre le scanner en arrière-plan
 Thread(target=check_instagram_posts).start()
