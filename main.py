@@ -35,18 +35,19 @@ def webhook():
 def check_instagram_posts():
     SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
     MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
-    business_id = "9878394526928338"
     last_seen = {}
+
+    # 🔒 Ici on met les ID des pages Facebook manuellement
+    page_ids = [
+        "500108869863121",  # Page Gestion J-C
+        "476928322180823"   # Page Gestion J-E (pour aeesha_slh)
+    ]
 
     while True:
         try:
             print("🔁 Boucle détection post IG")
-            pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/accounts", params={
-                "access_token": SYSTEM_TOKEN
-            }).json().get("data", [])
-
-            for page in pages:
-                page_id = page.get("id")
+            for page_id in page_ids:
+                print(f"➡️ Page forcée: {page_id}")
                 ig_data = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
                     "fields": "instagram_business_account",
                     "access_token": SYSTEM_TOKEN
