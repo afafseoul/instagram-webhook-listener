@@ -1,13 +1,11 @@
-from flask import Flask, request, redirect, render_template_string, session
+from flask import Flask, request
 import requests
 import json
 import os
-from datetime import datetime, timedelta
 from threading import Thread
 import time
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "supersecret")
 
 @app.route('/')
 def index():
@@ -18,23 +16,19 @@ def webhook():
     VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
     MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
 
-    print("📥 Requête Webhook reçue")
     if request.method == 'GET':
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
-        print(f"🔍 GET mode={mode}, token={token}, challenge={challenge}")
         if mode == "subscribe" and token == VERIFY_TOKEN:
-            print("✅ Vérification du webhook réussie")
+            print("✅ Vérification webhook réussie")
             return challenge, 200
-        print("❌ Échec vérification webhook")
-        return "Erreur de vérification", 403
+        return "❌ Erreur vérification", 403
 
     if request.method == 'POST':
         data = request.json
-        print(f"📩 Données POST reçues: {json.dumps(data, indent=2)}")
+        print(f"📩 Webhook POST reçu: {json.dumps(data, indent=2)}")
         if MAKE_WEBHOOK_URL:
-            print(f"📤 Redirection vers MAKE_WEBHOOK_URL: {MAKE_WEBHOOK_URL}")
             requests.post(MAKE_WEBHOOK_URL, json=data)
         return "OK", 200
 
@@ -46,58 +40,60 @@ def check_instagram_posts():
 
     while True:
         try:
-            print("🔁 Début boucle de vérification des posts IG")
-
-            pages_resp = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/accounts", params={
+            print("🔁 Boucle détection post IG")
+            pages = requests.get(f"https://graph.facebook.com/v19.0/{business_id}/accounts", params={
                 "access_token": SYSTEM_TOKEN
-            })
-            print(f"📦 Réponse /accounts: {pages_resp.text}")
-            pages = pages_resp.json().get("data", [])
+            }).json().get("data", [])
 
             for page in pages:
                 page_id = page.get("id")
-                print(f"➡️ Page trouvée: {page_id}")
-
-                ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
+                ig_data = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
                     "fields": "instagram_business_account",
                     "access_token": SYSTEM_TOKEN
-                })
-                print(f"📦 Réponse IG account /{page_id}: {ig_resp.text}")
+                }).json()
 
-                ig_account = ig_resp.json().get("instagram_business_account")
-                if ig_account:
-                    ig_id = ig_account.get("id")
-                    print(f"✅ Compte IG détecté: {ig_id}")
+                ig_account = ig_data.get("instagram_business_account")
+                if not ig_account:
+                    print(f"❌ Pas de compte IG pour la page {page_id}")
+                    continue
 
-                    media_res = requests.get(f"https://graph.facebook.com/v19.0/{ig_id}/media", params={
-                        "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
-                        "access_token": SYSTEM_TOKEN
-                    })
-                    print(f"📦 Réponse media /{ig_id}/media: {media_res.text}")
+                ig_id = ig_account["id"]
+                print(f"✅ IG lié détecté: {ig_id}")
 
-                    media = media_res.json().get("data", [])
-                    if not media:
-                        print(f"⚠️ Aucun média trouvé pour IG {ig_id}")
-                        continue
+                media = requests.get(f"https://graph.facebook.com/v19.0/{ig_id}/media", params={
+                    "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
+                    "access_token": SYSTEM_TOKEN
+                }).json().get("data", [])
 
-                    latest_post = media[0]
-                    print(f"🆕 Post détecté: {latest_post['id']} pour IG {ig_id}")
-                    if ig_id not in last_seen or last_seen[ig_id] != latest_post["id"]:
-                        last_seen[ig_id] = latest_post["id"]
-                        if MAKE_WEBHOOK_URL:
-                            print(f"🚀 Envoi du nouveau post à MAKE_WEBHOOK_URL")
-                            requests.post(MAKE_WEBHOOK_URL, json=latest_post)
-                else:
-                    print(f"❌ Aucun compte IG relié à la page {page_id}")
+                if not media:
+                    print(f"⚠️ Aucun média pour {ig_id}")
+                    continue
+
+                latest = media[0]
+                if last_seen.get(ig_id) != latest["id"]:
+                    last_seen[ig_id] = latest["id"]
+                    print(f"🆕 Nouveau post: {latest['id']} pour {ig_id}")
+                    if MAKE_WEBHOOK_URL:
+                        requests.post(MAKE_WEBHOOK_URL, json=latest)
 
         except Exception as e:
-            print(f"💥 Erreur dans check_instagram_posts: {str(e)}")
+            print(f"💥 Erreur dans boucle IG: {str(e)}")
 
-        print("⏳ Pause de 40s avant nouvelle vérification")
-        time.sleep(40)
+        print("⏳ Attente 45s")
+        time.sleep(45)
 
-# 🔁 Démarre le scanner en arrière-plan
+def keep_alive():
+    url = "https://instagram-webhook-listener.onrender.com"
+    while True:
+        try:
+            print("🔄 Keep alive ping")
+            requests.get(url)
+        except:
+            pass
+        time.sleep(30)
+
 Thread(target=check_instagram_posts).start()
+Thread(target=keep_alive).start()
 
 if __name__ == '__main__':
     app.run(debug=True)
