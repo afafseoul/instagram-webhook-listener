@@ -1,3 +1,5 @@
 flask
 requests
 gunicorn
+gspread
+oauth2client
