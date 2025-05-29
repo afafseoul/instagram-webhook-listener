@@ -2,108 +2,108 @@ from flask import Flask, request
 import requests
 import json
 import os
-from threading import Thread
 import time
+from threading import Thread
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
+# Config
+WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
+RENDER_URL = "https://instagram-webhook-listener.onrender.com"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY"
+
+# Google Sheet Auth
+scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
+creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+client = gspread.authorize(creds)
+
+# Global state
+last_seen_posts = {}
+
 @app.route('/')
 def index():
-    return '🏠 API Commanda opérationnelle.'
+    return '✅ API opérationnelle'
 
-@app.route('/webhook', methods=['GET', 'POST'])
+@app.route('/webhook', methods=['POST'])
 def webhook():
-    VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
-    MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+    data = request.json
+    print(f"📩 Commentaire reçu : {json.dumps(data, indent=2)}")
+    if WEBHOOK_URL:
+        requests.post(WEBHOOK_URL, json=data)
+    return 'OK', 200
 
-    if request.method == 'GET':
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            print("✅ Vérification webhook réussie")
-            return challenge, 200
-        return "❌ Erreur vérification", 403
+@app.route('/reply', methods=['POST'])
+def reply():
+    data = request.json
+    ig_user_id = data.get("ig_user_id")
+    comment_id = data.get("comment_id")
+    message = data.get("message")
+    if not all([ig_user_id, comment_id, message]):
+        return "Missing data", 400
+    url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
+    r = requests.post(url, params={
+        "access_token": SYSTEM_TOKEN,
+        "message": message
+    })
+    print(f"💬 Réponse envoyée : {r.text}")
+    return r.text, r.status_code
 
-    if request.method == 'POST':
-        data = request.json
-        print(f"📩 Webhook POST reçu: {json.dumps(data, indent=2)}")
-        if MAKE_WEBHOOK_URL:
-            requests.post(MAKE_WEBHOOK_URL, json=data)
-        return "OK", 200
+def fetch_page_ids():
+    try:
+        sheet = client.open_by_url(SHEET_URL)
+        worksheet = sheet.worksheet("Feuille 2")
+        data = worksheet.col_values(1)[1:]  # Skip header
+        return [pid.strip() for pid in data if pid.strip()]
+    except Exception as e:
+        print(f"❌ Erreur lecture Google Sheet: {e}")
+        return []
 
-def check_instagram_posts():
-    SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
-    MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
-    last_seen = {}
-
-    # 🔒 Ici on met les ID des pages Facebook manuellement
-    page_ids = [
-        "500108869863121",  # Page Gestion J-C
-        "585442894651616"   # Page Gestion J-E (pour aeesha_slh)
-    ]
-
-    initialized = False
-
+def watch_new_posts():
     while True:
-        try:
-            print("🔁 Boucle détection post IG")
-            for page_id in page_ids:
-                print(f"➡️ Page forcée: {page_id}")
+        print("🔁 Vérification nouveaux posts...")
+        page_ids = fetch_page_ids()
+
+        for page_id in page_ids:
+            try:
                 ig_data = requests.get(f"https://graph.facebook.com/v19.0/{page_id}", params={
                     "fields": "instagram_business_account",
                     "access_token": SYSTEM_TOKEN
                 }).json()
 
-                ig_account = ig_data.get("instagram_business_account")
-                if not ig_account:
-                    print(f"❌ Pas de compte IG pour la page {page_id}")
+                ig = ig_data.get("instagram_business_account")
+                if not ig:
                     continue
 
-                ig_id = ig_account["id"]
-                print(f"✅ IG lié détecté: {ig_id}")
-
+                ig_id = ig["id"]
                 media = requests.get(f"https://graph.facebook.com/v19.0/{ig_id}/media", params={
                     "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
                     "access_token": SYSTEM_TOKEN
                 }).json().get("data", [])
 
                 if not media:
-                    print(f"⚠️ Aucun média pour {ig_id}")
                     continue
 
                 latest = media[0]
+                if last_seen_posts.get(ig_id) != latest["id"]:
+                    print(f"🆕 Nouveau post détecté pour {ig_id} : {latest['id']}")
+                    last_seen_posts[ig_id] = latest["id"]
+            except Exception as e:
+                print(f"💥 Erreur boucle post: {e}")
 
-                if not initialized:
-                    print(f"⏳ Initialisation - enregistrement sans envoi du post {latest['id']}")
-                    last_seen[ig_id] = latest["id"]
-                    continue
-
-                if last_seen.get(ig_id) != latest["id"]:
-                    last_seen[ig_id] = latest["id"]
-                    print(f"🆕 Nouveau post: {latest['id']} pour {ig_id}")
-                    if MAKE_WEBHOOK_URL:
-                        requests.post(MAKE_WEBHOOK_URL, json=latest)
-
-            initialized = True
-
-        except Exception as e:
-            print(f"💥 Erreur dans boucle IG: {str(e)}")
-
-        print("⏳ Attente 45s")
         time.sleep(45)
 
 def keep_alive():
-    url = "https://instagram-webhook-listener.onrender.com"
     while True:
         try:
-            print("🔄 Keep alive ping")
-            requests.get(url)
+            requests.get(RENDER_URL)
         except:
             pass
         time.sleep(30)
 
-Thread(target=check_instagram_posts).start()
+Thread(target=watch_new_posts).start()
 Thread(target=keep_alive).start()
 
 if __name__ == '__main__':
