@@ -1,35 +1,31 @@
-import requests
-import threading
 import time
-import os
+import threading
+import requests
 from google_sheet import get_active_pages
 
-ACCESS_TOKEN = os.getenv("META_SYSTEM_TOKEN")
-WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_POST")
+WEBHOOK_URL_POSTS = "https://hook.us1.make.com/ton_webhook_posts"  # remplace avec ton vrai lien Make.com
 
-def check_posts(page_id):
-    url = f"https://graph.facebook.com/v19.0/{page_id}/feed?fields=id,message,created_time&access_token={ACCESS_TOKEN}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-
-        # 🧠 Ici tu peux ajouter une logique pour filtrer les nouveaux posts uniquement
-        print(f"[{page_id}] ✅ Posts récupérés :", data)
-
-        # Envoi à Make si des données existent
-        if "data" in data and data["data"]:
-            requests.post(WEBHOOK_URL, json={"page_id": page_id, "posts": data["data"]})
-    except Exception as e:
-        print(f"[{page_id}] ❌ Erreur récupération posts :", e)
-
-def start():
-    print("📄 Lecture Google Sheet des pages actives (posts)...")
-    while True:
+def check_new_posts():
+    pages = get_active_pages()
+    for page in pages:
+        # ⚠️ Cette structure est un exemple : à toi de modifier selon ton vrai check
+        print(f"🔍 Vérification des nouveaux posts pour {page['client_name']} ({page['page_id']})...")
+        data = {
+            "page_id": page["page_id"],
+            "instagram_id": page["instagram_id"],
+            "client_name": page["client_name"]
+        }
         try:
-            pages = get_active_pages()
-            for page_id in pages:
-                threading.Thread(target=check_posts, args=(page_id,)).start()
-            time.sleep(60)  # relance toutes les 60 secondes
+            response = requests.post(WEBHOOK_URL_POSTS, json=data)
+            if response.status_code == 200:
+                print(f"📤 Webhook envoyé pour {page['client_name']}")
+            else:
+                print(f"⚠️ Erreur Webhook : {response.status_code} - {response.text}")
         except Exception as e:
-            print("❌ Erreur dans la boucle posts :", e)
-            time.sleep(60)
+            print(f"❌ Exception Webhook pour {page['client_name']}: {e}")
+
+def watch_new_posts():
+    print("🟢 Thread watch_posts lancé")
+    while True:
+        check_new_posts()
+        time.sleep(60)  # toutes les 60 secondes
