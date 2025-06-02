@@ -8,6 +8,7 @@ def start_webhook():
     app.run(host='0.0.0.0', port=10000)
 
 if __name__ == '__main__':
+    print("🚀 Lancement Commanda")
     threading.Thread(target=watch_new_posts).start()
     threading.Thread(target=watch_new_comments).start()
     threading.Thread(target=keep_alive).start()
