@@ -1,25 +1,30 @@
-from flask import Flask, request, jsonify
-from reply import reply_to_comment
+from flask import Blueprint, request
 
-app = Flask(__name__)
+webhook_bp = Blueprint('webhook', __name__)
 
-@app.route('/')
-def home():
-    return "✅ API Commanda opérationnelle"
+@webhook_bp.route('/webhook', methods=['GET', 'POST'])
+def webhook():
+    if request.method == 'GET':
+        mode = request.args.get('hub.mode')
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        print(f"🌐 GET reçu : mode={mode}, token={token}, challenge={challenge}")
+        if token == "test_token_meta":
+            return challenge, 200
+        return "❌ Token incorrect", 403
 
-@app.route('/webhook', methods=['POST'])
-def webhook_handler():
-    data = request.json
-    print(f"📥 Donnée reçue via /webhook: {data}")
-    return jsonify({"status": "ok"})
+    if request.method == 'POST':
+        data = request.get_json()
+        print("📩 POST reçu ! Données brutes :")
+        print(data)
 
-@app.route('/reply', methods=['POST'])
-def reply_handler():
-    data = request.json
-    comment_id = data.get("comment_id")
-    message = data.get("message")
-    if comment_id and message:
-        reply_to_comment(comment_id, message)
-        return jsonify({"status": "replied"})
-    else:
-        return jsonify({"error": "Paramètres manquants"}), 400
+        try:
+            for entry in data.get("entry", []):
+                for change in entry.get("changes", []):
+                    print(f"🔄 Champ modifié : {change.get('field')}")
+                    if change.get("field") == "instagram_comments":
+                        print("✅ Nouveau commentaire détecté")
+        except Exception as e:
+            print(f"❌ Erreur traitement : {e}")
+
+        return "ok", 200
