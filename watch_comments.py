@@ -1,31 +1,27 @@
+# watch_comments.py
+
 import requests
-import threading
 import time
-import os
-from google_sheet import get_active_pages
+from google_sheet import fetch_page_ids
 
-ACCESS_TOKEN = os.getenv("META_SYSTEM_TOKEN")
-WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_COMMENT")
+WEBHOOK_COMMENTS_URL = "https://hook.eu1.make.com/..."  # ton vrai lien Make ici
 
-def check_comments(page_id):
-    url = f"https://graph.facebook.com/v19.0/{page_id}/feed?fields=comments{{id,message,from}}&access_token={ACCESS_TOKEN}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        # 🧠 ici tu dois filtrer les nouveaux commentaires si tu veux éviter les doublons
-        print(f"[{page_id}] ✅ Commentaires reçus :", data)
-        requests.post(WEBHOOK_URL, json=data)  # envoyer à Make
-    except Exception as e:
-        print(f"[{page_id}] ❌ Erreur récupération commentaires :", e)
-
-def start():
-    print("📄 Lecture Google Sheet...")
+def watch_new_comments():
+    print("🌀 Lancement de la boucle de surveillance des commentaires...")
     while True:
         try:
-            pages = get_active_pages()
-            for page_id in pages:
-                threading.Thread(target=check_comments, args=(page_id,)).start()
-            time.sleep(60)  # boucle toutes les 60 secondes
+            pages = fetch_page_ids()
+            for page in pages:
+                print(f"📩 Check commentaires pour {page['client_name']}")
+
+                requests.post(WEBHOOK_COMMENTS_URL, json={
+                    "instagram_id": page["instagram_id"],
+                    "page_id": page["page_id"],
+                    "client": page["client_name"],
+                    "type": "new_comment"
+                })
+
+            time.sleep(120)
         except Exception as e:
-            print("❌ Erreur dans la boucle comments:", e)
+            print(f"❌ Erreur dans watch_new_comments : {e}")
             time.sleep(60)
