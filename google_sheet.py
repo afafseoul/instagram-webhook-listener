@@ -1,3 +1,5 @@
+SHEET_URL = "https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY/edit"
+
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
