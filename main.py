@@ -1,15 +1,9 @@
-import threading
-from watch_posts import watch_new_posts
-from watch_comments import watch_new_comments
-from keep_alive import keep_alive
-from webhook import app
+from flask import Flask
+from webhook import webhook_bp
 
-def start_webhook():
+app = Flask(__name__)
+app.register_blueprint(webhook_bp)
+
+if __name__ == "__main__":
+    print("✅ Flask Webhook Test lancé")
     app.run(host='0.0.0.0', port=10000)
-
-if __name__ == '__main__':
-    print("🚀 Lancement Commanda")
-    threading.Thread(target=watch_new_posts).start()
-    threading.Thread(target=watch_new_comments).start()
-    threading.Thread(target=keep_alive).start()
-    threading.Thread(target=start_webhook).start()
