@@ -9,18 +9,18 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
-# Config
+# === CONFIG ===
 WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
 SYSTEM_TOKEN = os.getenv("META_SYSTEM_TOKEN")
 RENDER_URL = "https://instagram-webhook-listener.onrender.com"
 SHEET_URL = "https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY"
 
-# Google Sheet Auth
-scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+# === GOOGLE SHEETS AUTH ===
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("/etc/secrets/credentials.json", scope)
 client = gspread.authorize(creds)
 
-# Global state
+# === GLOBAL ===
 last_seen_posts = {}
 
 @app.route('/')
@@ -41,8 +41,10 @@ def reply():
     ig_user_id = data.get("ig_user_id")
     comment_id = data.get("comment_id")
     message = data.get("message")
+
     if not all([ig_user_id, comment_id, message]):
         return "Missing data", 400
+
     url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
     r = requests.post(url, params={
         "access_token": SYSTEM_TOKEN,
@@ -55,8 +57,8 @@ def fetch_page_ids():
     try:
         sheet = client.open_by_url(SHEET_URL)
         worksheet = sheet.worksheet("Feuille 2")
-        data = worksheet.col_values(1)[1:]  # Skip header
-        return [pid.strip() for pid in data if pid.strip()]
+        records = worksheet.get_all_records()
+        return [str(row["Client page id"]).strip() for row in records if row.get("Client page id")]
     except Exception as e:
         print(f"❌ Erreur lecture Google Sheet: {e}")
         return []
@@ -91,7 +93,7 @@ def watch_new_posts():
                     print(f"🆕 Nouveau post détecté pour {ig_id} : {latest['id']}")
                     last_seen_posts[ig_id] = latest["id"]
             except Exception as e:
-                print(f"💥 Erreur boucle post: {e}")
+                print(f"💥 Erreur boucle post pour {page_id} : {e}")
 
         time.sleep(45)
 
@@ -103,6 +105,7 @@ def keep_alive():
             pass
         time.sleep(30)
 
+# === THREADS ===
 Thread(target=watch_new_posts).start()
 Thread(target=keep_alive).start()
 
