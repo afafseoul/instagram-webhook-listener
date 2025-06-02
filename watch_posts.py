@@ -12,6 +12,7 @@ def get_ig_posts(instagram_id):
     return response.json().get("data", [])
 
 def watch_new_posts():
+    print("🟢 Thread watch_posts lancé")
     while True:
         try:
             pages = fetch_page_ids()
@@ -32,6 +33,6 @@ def watch_new_posts():
                     print(f"📤 Nouveau post détecté: {post_id} (IG ID: {ig_id})")
 
         except Exception as e:
-            print("Erreur dans watch_new_posts:", e)
+            print("❌ Erreur dans watch_new_posts:", e)
 
         time.sleep(30)
