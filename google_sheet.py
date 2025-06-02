@@ -25,3 +25,6 @@ def fetch_page_ids():
     except Exception as e:
         print(f"❌ Erreur lecture Google Sheet: {e}")
         return []
+
+# Pour compatibilité avec watch_posts.py et watch_comments.py
+get_active_pages = fetch_page_ids
