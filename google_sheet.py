@@ -2,25 +2,24 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 def fetch_page_ids():
+    print("📄 Lecture Google Sheet...")
     try:
-        print("🔁 Lecture Google Sheet...")
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('/etc/secrets/credentials.json', scope)
-        client = gspread.authorize(creds)
-
-        sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY/edit").sheet1
-        data = sheet.get_all_records()
-
-        print(f"✅ Feuille récupérée ({len(data)} lignes)")
-        return [
-            {
-                "page_id": row.get("ID Page Facebook"),
-                "instagram_id": row.get("ID Compte Instagram"),
-                "client": row.get("Nom client"),
-                "active": str(row.get("Statut", "")).strip().lower() == "active"
-            }
-            for row in data if str(row.get("Statut", "")).strip().lower() == "active"
-        ]
+        gc = gspread.service_account(filename='/etc/secrets/credentials.json')
+        sh = gc.open_by_url(SHEET_URL)
+        worksheet = sh.sheet1
+        rows = worksheet.get_all_values()
+        print(f"📄 Sheet récupérée : {len(rows)} lignes")
+        page_ids = []
+        for row in rows[1:]:  # skip header
+            if len(row) >= 4 and row[3].strip().lower() == "active":
+                print(f"✅ Page active trouvée : {row[0]} / {row[1]}")
+                page_ids.append({
+                    "page_id": row[0],
+                    "instagram_id": row[1],
+                    "client_name": row[2]
+                })
+        print(f"✅ Total pages actives : {len(page_ids)}")
+        return page_ids
     except Exception as e:
-        print("❌ Erreur lecture Google Sheet:", e)
+        print(f"❌ Erreur lecture Google Sheet: {e}")
         return []
