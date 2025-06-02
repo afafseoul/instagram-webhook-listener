@@ -12,6 +12,7 @@ def get_ig_comments(instagram_id):
     return response.json().get("data", [])
 
 def watch_new_comments():
+    print("🟢 Thread watch_comments lancé")
     while True:
         try:
             pages = fetch_page_ids()
@@ -24,6 +25,8 @@ def watch_new_comments():
                 for media in medias:
                     media_id = media['id']
                     comments = media.get("comments", {}).get("data", [])
+                    print(f"🔍 Commentaires pour {media_id}: {comments}")
+
                     for comment in comments:
                         comment_id = comment['id']
                         if comment_id not in last_seen_comments:
@@ -36,6 +39,6 @@ def watch_new_comments():
                             print(f"📩 Nouveau commentaire reçu: {comment_id} (IG ID: {ig_id})")
 
         except Exception as e:
-            print("Erreur dans watch_new_comments:", e)
+            print("❌ Erreur dans watch_new_comments:", e)
 
         time.sleep(30)
