@@ -1,27 +1,58 @@
-# watch_comments.py
-
-import requests
+import os
 import time
+import requests
 from google_sheet import fetch_page_ids
 
-WEBHOOK_COMMENTS_URL = "https://hook.eu1.make.com/..."  # ton vrai lien Make ici
+META_TOKEN = os.environ.get("META_SYSTEM_TOKEN")
+MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_COMMENTS")
+
+# Cache local pour suivre les commentaires déjà vus
+last_seen_comments = {}
+
+def get_comments(instagram_id):
+    url = f"https://graph.facebook.com/v19.0/{instagram_id}/media?fields=id,comments{{id,text,timestamp,username}}&access_token={META_TOKEN}"
+    try:
+        res = requests.get(url)
+        res.raise_for_status()
+        data = res.json()
+        return data.get("data", [])
+    except Exception as e:
+        print(f"❌ Erreur récupération des commentaires : {e}")
+        return []
+
+def send_to_make(comment, media_id, client_name):
+    payload = {
+        "media_id": media_id,
+        "comment_id": comment["id"],
+        "text": comment.get("text"),
+        "username": comment.get("username"),
+        "timestamp": comment.get("timestamp"),
+        "client": client_name,
+    }
+    try:
+        res = requests.post(MAKE_WEBHOOK, json=payload)
+        if res.status_code == 200:
+            print(f"📨 Envoyé à Make : {comment['text'][:30]}...")
+        else:
+            print(f"⚠️ Erreur Make : {res.status_code} {res.text}")
+    except Exception as e:
+        print(f"❌ Exception envoi Make : {e}")
 
 def watch_new_comments():
-    print("🌀 Lancement de la boucle de surveillance des commentaires...")
+    print("🧠 Lancement détection rapide des commentaires...")
+    pages = fetch_page_ids()
     while True:
-        try:
-            pages = fetch_page_ids()
-            for page in pages:
-                print(f"📩 Check commentaires pour {page['client_name']}")
-
-                requests.post(WEBHOOK_COMMENTS_URL, json={
-                    "instagram_id": page["instagram_id"],
-                    "page_id": page["page_id"],
-                    "client": page["client_name"],
-                    "type": "new_comment"
-                })
-
-            time.sleep(120)
-        except Exception as e:
-            print(f"❌ Erreur dans watch_new_comments : {e}")
-            time.sleep(60)
+        for page in pages:
+            ig_id = page["instagram_id"]
+            client = page["client_name"]
+            medias = get_comments(ig_id)
+            for media in medias:
+                media_id = media.get("id")
+                comments = media.get("comments", {}).get("data", [])
+                for comment in comments:
+                    if comment["id"] not in last_seen_comments.get(media_id, []):
+                        send_to_make(comment, media_id, client)
+                        last_seen_comments.setdefault(media_id, []).append(comment["id"])
+                        # On garde max 50 commentaires récents par post
+                        last_seen_comments[media_id] = last_seen_comments[media_id][-50:]
+        time.sleep(10)  # 🔁 boucle toutes les 10 secondes
