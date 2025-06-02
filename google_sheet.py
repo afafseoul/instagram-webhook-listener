@@ -3,6 +3,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 def fetch_page_ids():
     try:
+        print("🔁 Lecture Google Sheet...")
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         creds = ServiceAccountCredentials.from_json_keyfile_name('/etc/secrets/credentials.json', scope)
         client = gspread.authorize(creds)
@@ -10,6 +11,7 @@ def fetch_page_ids():
         sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY/edit").sheet1
         data = sheet.get_all_records()
 
+        print(f"✅ Feuille récupérée ({len(data)} lignes)")
         return [
             {
                 "page_id": row.get("ID Page Facebook"),
