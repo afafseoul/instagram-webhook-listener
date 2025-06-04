@@ -1,8 +1,7 @@
 # main.py
 from flask import Flask, request
 import threading
-from utils.google_sheet import get_sheet_page_ids
-from utils.config_test import HARDCODED_PAGE_IDS, USE_HARDCODED_IDS
+from google_sheet import get_active_pages  # utilise la version hardcodée
 import time
 
 app = Flask(__name__)
@@ -19,32 +18,34 @@ def webhook():
 
     if request.method == "POST":
         print("📥 Données POST reçues :", request.json)
-        changes = request.json.get("entry", [{}])[0].get("changes", [])
-        for change in changes:
-            if change.get("field") == "comments":
-                comment_data = change.get("value", {})
-                print("💬 Nouveau commentaire détecté :", comment_data)
+        entry = request.json.get("entry", [])
+        print(f"📦 Nombre d'éléments dans 'entry': {len(entry)}")
+
+        for change_block in entry:
+            changes = change_block.get("changes", [])
+            print(f"🔄 Nombre de changements : {len(changes)}")
+
+            for change in changes:
+                field = change.get("field")
+                print(f"🔍 Champ détecté : {field}")
+                if field == "comments":
+                    comment_data = change.get("value", {})
+                    print("💬 Nouveau commentaire détecté :", comment_data)
+
         return "ok", 200
 
 def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
-    page_ids = []
+    try:
+        page_ids = get_active_pages()
+        print("✅ Pages récupérées :", page_ids)
+    except Exception as e:
+        print("❌ Erreur lors de la récupération des pages :", e)
+        return
 
-    if USE_HARDCODED_IDS:
-        print("⚙️ Utilisation des IDs en dur dans le code")
-        page_ids = HARDCODED_PAGE_IDS
-    else:
-        print("🔍 Tentative d'accès au Google Sheet...")
-        try:
-            page_ids = get_sheet_page_ids()
-            print("✅ Google Sheet accessible. IDs détectés :", page_ids)
-        except Exception as e:
-            print("❌ Erreur lors de la lecture du Google Sheet :", e)
-
-    # Simuler un listener webhook pour chaque ID (ou juste montrer qu'on les a)
     print("🔁 Boucle de vérification des pages actives :")
     for pid in page_ids:
-        print("➡️ Page active :", pid)
+        print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
 
 if __name__ == "__main__":
     print("✅ Lancement Commanda")
