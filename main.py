@@ -18,5 +18,5 @@ def run_watchers():
 
 if __name__ == '__main__':
     print("✅ Lancement Commanda")
-    keep_alive(app)  # démarre le serveur Flask
+    keep_alive()  # démarre le serveur Flask
     run_watchers()
