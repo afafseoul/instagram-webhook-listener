@@ -1,30 +1,21 @@
-from flask import Blueprint, request
+import os
 
-webhook_bp = Blueprint('webhook', __name__)
+def webhook_handler(request):
+    if request.method == "GET":
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-@webhook_bp.route('/webhook', methods=['GET', 'POST'])
-def webhook():
-    if request.method == 'GET':
-        mode = request.args.get('hub.mode')
-        token = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
-        print(f"🌐 GET reçu : mode={mode}, token={token}, challenge={challenge}")
-        if token == "test_token_meta":
+        if mode == "subscribe" and token == os.getenv("META_VERIFY_TOKEN"):
+            print("🔐 Webhook vérifié avec succès.")
             return challenge, 200
-        return "❌ Token incorrect", 403
 
-    if request.method == 'POST':
-        data = request.get_json()
-        print("📩 POST reçu ! Données brutes :")
-        print(data)
+        print("❌ Échec de la vérification du webhook.")
+        return "Erreur de vérification", 403
 
-        try:
-            for entry in data.get("entry", []):
-                for change in entry.get("changes", []):
-                    print(f"🔄 Champ modifié : {change.get('field')}")
-                    if change.get("field") == "instagram_comments":
-                        print("✅ Nouveau commentaire détecté")
-        except Exception as e:
-            print(f"❌ Erreur traitement : {e}")
+    elif request.method == "POST":
+        data = request.json
+        print("📥 Données reçues via webhook :", data)
+        return "Événement reçu", 200
 
-        return "ok", 200
+    return "Méthode non supportée", 400
