@@ -1,30 +1,24 @@
-SHEET_URL = "https://docs.google.com/spreadsheets/d/11H74lWqyPPc0SPVOcX0x1iN97x8qJw6c7y8-WFeWijY/edit"
-
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
 def fetch_page_ids():
-    print("📄 Lecture Google Sheet...")
-    try:
-        gc = gspread.service_account(filename='/etc/secrets/credentials.json')
-        sh = gc.open_by_url(SHEET_URL)
-        worksheet = sh.sheet1
-        rows = worksheet.get_all_values()
-        print(f"📄 Sheet récupérée : {len(rows)} lignes")
-        page_ids = []
-        for row in rows[1:]:  # skip header
-            if len(row) >= 4 and row[3].strip().lower() == "active":
-                print(f"✅ Page active trouvée : {row[0]} / {row[1]}")
-                page_ids.append({
-                    "page_id": row[0],
-                    "instagram_id": row[1],
-                    "client_name": row[2]
-                })
-        print(f"✅ Total pages actives : {len(page_ids)}")
-        return page_ids
-    except Exception as e:
-        print(f"❌ Erreur lecture Google Sheet: {e}")
-        return []
+    print("⚙️ Mode test : utilisation des IDs en dur")
 
-# Pour compatibilité avec watch_posts.py et watch_comments.py
+    page_ids = [
+        {
+            "page_id": "17841464324220975",  # Page Gestion J-C
+            "instagram_id": "17850965606804656",  # Remplace par l'ID Instagram réel
+            "client_name": "Gestion J-C"
+        },
+        {
+            "page_id": "17841470887313402",  # Page Gestion J-E
+            "instagram_id": "17850965606804656",  # Remplace par l'ID Instagram réel
+            "client_name": "Gestion J-E"
+        }
+    ]
+
+    print(f"✅ Total pages en dur : {len(page_ids)}")
+    for entry in page_ids:
+        print(f"➡️ Page : {entry['page_id']} - Insta : {entry['instagram_id']} - Client : {entry['client_name']}")
+    
+    return page_ids
+
+# Pour compatibilité avec les autres modules
 get_active_pages = fetch_page_ids
