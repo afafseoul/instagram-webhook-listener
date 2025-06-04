@@ -1,23 +1,22 @@
-from webhook import app
-from threading import Thread
-from watch_comments import watch_new_comments
+from flask import Flask, request
+from webhook import webhook_handler
+import threading
 from watch_posts import watch_new_posts
+from watch_comments import watch_new_comments
+from keep_alive import keep_alive
 
-def launch():
-    print("🚀 Lancement Commanda")
-    
-    # Lancer la détection des nouveaux posts
-    thread_posts = Thread(target=watch_new_posts)
-    thread_posts.daemon = True
-    thread_posts.start()
-    print("🟢 Thread watch_posts lancé")
+app = Flask(__name__)
 
-    # Lancer la détection des nouveaux commentaires
-    thread_comments = Thread(target=watch_new_comments)
-    thread_comments.daemon = True
-    thread_comments.start()
-    print("🟢 Thread watch_comments lancé")
+# route principale utilisée par Meta Webhook
+@app.route('/webhook', methods=['GET', 'POST'])
+def webhook():
+    return webhook_handler(request)
 
-if __name__ == "__main__":
-    launch()
-    app.run(host="0.0.0.0", port=10000)
+def run_watchers():
+    threading.Thread(target=watch_new_posts, daemon=True).start()
+    threading.Thread(target=watch_new_comments, daemon=True).start()
+
+if __name__ == '__main__':
+    print("✅ Lancement Commanda")
+    keep_alive(app)  # démarre le serveur Flask
+    run_watchers()
