@@ -5,8 +5,8 @@ import os
 from google_sheet import get_active_pages
 
 app = Flask(__name__)
+thread_started = False  # Flag global
 
-# 👇 Lance la récupération des pages en parallèle
 def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
     try:
@@ -20,13 +20,13 @@ def watch_comments():
     for pid in page_ids:
         print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
 
-# 👇 Ce thread ne se lance qu'une seule fois
-@app.before_first_request
-def launch_thread_once():
-    if not hasattr(app, "thread_started"):
+@app.before_request
+def start_thread_once():
+    global thread_started
+    if not thread_started:
         print("🚀 Lancement du thread une seule fois")
         threading.Thread(target=watch_comments).start()
-        app.thread_started = True
+        thread_started = True
 
 @app.route("/")
 def home():
@@ -57,7 +57,6 @@ def webhook():
                         comment_data = change.get("value", {})
                         print("💬 Nouveau commentaire détecté :", comment_data)
 
-                        # 🔗 Envoi brut au webhook Make
                         make_url = os.environ.get("MAKE_WEBHOOK_COMMENT")
                         if make_url:
                             res = requests.post(make_url, json=comment_data)
