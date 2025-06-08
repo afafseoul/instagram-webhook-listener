@@ -1,10 +1,12 @@
 from flask import Flask, request
 import threading
+import requests
+import os
 from google_sheet import get_active_pages
 
 app = Flask(__name__)
-thread_started = False
 
+# 👇 Lance la récupération des pages en parallèle
 def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
     try:
@@ -17,6 +19,14 @@ def watch_comments():
     print("🔁 Boucle de vérification des pages actives :")
     for pid in page_ids:
         print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
+
+# 👇 Ce thread ne se lance qu'une seule fois
+@app.before_first_request
+def launch_thread_once():
+    if not hasattr(app, "thread_started"):
+        print("🚀 Lancement du thread une seule fois")
+        threading.Thread(target=watch_comments).start()
+        app.thread_started = True
 
 @app.route("/")
 def home():
@@ -47,17 +57,18 @@ def webhook():
                         comment_data = change.get("value", {})
                         print("💬 Nouveau commentaire détecté :", comment_data)
 
+                        # 🔗 Envoi brut au webhook Make
+                        make_url = os.environ.get("MAKE_WEBHOOK_COMMENT")
+                        if make_url:
+                            res = requests.post(make_url, json=comment_data)
+                            print(f"📤 Envoyé à Make ({res.status_code})")
+                        else:
+                            print("⚠️ MAKE_WEBHOOK_COMMENT non défini")
+
         except Exception as e:
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
 
-# ✅ Ce bloc sera appelé par Gunicorn au moment de charger l'app
-def start_background_thread_once():
-    global thread_started
-    if not thread_started:
-        print("🚀 Lancement du thread une seule fois")
-        threading.Thread(target=watch_comments).start()
-        thread_started = True
-
-start_background_thread_once()  # appel direct
+if __name__ == "__main__":
+    app.run()
