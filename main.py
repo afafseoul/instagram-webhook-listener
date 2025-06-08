@@ -3,6 +3,7 @@ import threading
 from google_sheet import get_active_pages
 
 app = Flask(__name__)
+thread_started = False
 
 def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
@@ -16,13 +17,6 @@ def watch_comments():
     print("🔁 Boucle de vérification des pages actives :")
     for pid in page_ids:
         print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
-
-@app.before_request
-def launch_thread_once():
-    if not hasattr(app, "thread_started"):
-        print("🚀 Lancement du thread une seule fois")
-        threading.Thread(target=watch_comments).start()
-        app.thread_started = True
 
 @app.route("/")
 def home():
@@ -57,3 +51,13 @@ def webhook():
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
+
+# ✅ Ce bloc sera appelé par Gunicorn au moment de charger l'app
+def start_background_thread_once():
+    global thread_started
+    if not thread_started:
+        print("🚀 Lancement du thread une seule fois")
+        threading.Thread(target=watch_comments).start()
+        thread_started = True
+
+start_background_thread_once()  # appel direct
