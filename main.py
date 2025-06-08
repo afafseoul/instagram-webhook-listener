@@ -1,7 +1,6 @@
 from flask import Flask, request
 import threading
 from google_sheet import get_active_pages
-import time
 
 app = Flask(__name__)
 
@@ -17,6 +16,13 @@ def watch_comments():
     print("🔁 Boucle de vérification des pages actives :")
     for pid in page_ids:
         print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
+
+@app.before_request
+def launch_thread_once():
+    if not hasattr(app, "thread_started"):
+        print("🚀 Lancement du thread une seule fois")
+        threading.Thread(target=watch_comments).start()
+        app.thread_started = True
 
 @app.route("/")
 def home():
@@ -51,10 +57,3 @@ def webhook():
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
-
-# Lancer le thread dès que l'app démarre
-threading.Thread(target=watch_comments).start()
-
-# App utilisée par gunicorn (dans le Procfile)
-if __name__ != "__main__":
-    print("🚀 Flask app initialisée par Gunicorn")
