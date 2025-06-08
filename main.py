@@ -1,22 +1,22 @@
 from flask import Flask, request
+import threading
 from google_sheet import get_active_pages
+import time
 
 app = Flask(__name__)
-page_ids = []
 
-@app.before_first_request
-def initialize():
-    print("✅ Lancement Commanda")
-    print("🧠 Initialisation du système de commentaires")
-    global page_ids
+def watch_comments():
+    print("🧠 Début du thread de détection de commentaires")
     try:
         page_ids = get_active_pages()
         print("✅ Pages récupérées :", page_ids)
-        print("🔁 Boucle de vérification des pages actives :")
-        for pid in page_ids:
-            print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
     except Exception as e:
         print("❌ Erreur lors de la récupération des pages :", e)
+        return
+
+    print("🔁 Boucle de vérification des pages actives :")
+    for pid in page_ids:
+        print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
 
 @app.route("/")
 def home():
@@ -46,7 +46,15 @@ def webhook():
                     if field == "comments":
                         comment_data = change.get("value", {})
                         print("💬 Nouveau commentaire détecté :", comment_data)
+
         except Exception as e:
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
+
+# Lancer le thread dès que l'app démarre
+threading.Thread(target=watch_comments).start()
+
+# App utilisée par gunicorn (dans le Procfile)
+if __name__ != "__main__":
+    print("🚀 Flask app initialisée par Gunicorn")
