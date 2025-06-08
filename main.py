@@ -1,7 +1,9 @@
-from flask import Flask, request, jsonify
+# main.py
+from flask import Flask, request
 import threading
-from google_sheet import get_active_pages
+import os
 import time
+from google_sheet import get_active_pages
 
 app = Flask(__name__)
 
@@ -38,3 +40,24 @@ def webhook():
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
+
+def watch_comments():
+    print("🧠 Début du thread de détection de commentaires")
+    try:
+        page_ids = get_active_pages()
+        print(f"✅ Pages récupérées : {page_ids}")
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des pages : {e}")
+        return
+
+    print("🔁 Boucle de vérification des pages actives :")
+    for pid in page_ids:
+        print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
+
+if __name__ == "__main__":
+    print("✅ Lancement Commanda")
+    threading.Thread(target=watch_comments).start()
+
+    # ✅ Fix Render PORT
+    port = int(os.environ.get("PORT", 10000))
+    app.run(debug=False, host="0.0.0.0", port=port)
