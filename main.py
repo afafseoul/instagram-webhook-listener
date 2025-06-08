@@ -47,7 +47,7 @@ def watch_comments():
     for pid in page_ids:
         print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
 
-if __name__ == "__main__":
-    print("✅ Lancement Commanda")
-    threading.Thread(target=watch_comments).start()
-    app.run(debug=False, port=10000, host="0.0.0.0")
+# ✅ Toujours exécuté même si importé
+print("✅ Lancement Commanda")
+threading.Thread(target=watch_comments).start()
+app.run(debug=False, port=10000, host="0.0.0.0")
