@@ -1,9 +1,7 @@
-# main.py
 from flask import Flask, request
 import threading
-import os
-import time
 from google_sheet import get_active_pages
+import time
 
 app = Flask(__name__)
 
@@ -18,9 +16,14 @@ def webhook():
         return request.args.get("hub.challenge")
 
     if request.method == "POST":
+        print("📥 Requête POST reçue.")
         try:
-            data = request.get_json(force=True)
-            print("📥 Données POST reçues :", data)
+            if request.is_json:
+                data = request.get_json()
+                print("✅ JSON détecté :", data)
+            else:
+                print("⚠️ Requête POST sans JSON valide")
+                return "Invalid JSON", 400
 
             entry = data.get("entry", [])
             print(f"📦 Nombre d'éléments dans 'entry': {len(entry)}")
@@ -45,9 +48,9 @@ def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
     try:
         page_ids = get_active_pages()
-        print(f"✅ Pages récupérées : {page_ids}")
+        print("✅ Pages récupérées :", page_ids)
     except Exception as e:
-        print(f"❌ Erreur lors de la récupération des pages : {e}")
+        print("❌ Erreur lors de la récupération des pages :", e)
         return
 
     print("🔁 Boucle de vérification des pages actives :")
@@ -57,7 +60,4 @@ def watch_comments():
 if __name__ == "__main__":
     print("✅ Lancement Commanda")
     threading.Thread(target=watch_comments).start()
-
-    # ✅ Fix Render PORT
-    port = int(os.environ.get("PORT", 10000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=False, port=10000, host="0.0.0.0")
