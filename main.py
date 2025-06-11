@@ -1,9 +1,10 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import threading
 import requests
 import os
 from google_sheet import get_active_pages
 from watch_comments import subscribe_page_to_webhooks
+from reply import reply_to_comment
 
 app = Flask(__name__)
 thread_started = False  # Flag global
@@ -84,6 +85,26 @@ def webhook():
             print("❌ Erreur lors du traitement du POST :", e)
 
         return "ok", 200
+
+
+@app.route("/reply", methods=["POST"])
+def reply_endpoint():
+    """Reply to an Instagram comment using the Meta Graph API."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    comment_id = data.get("comment_id")
+    message = data.get("message")
+
+    if not comment_id or not message:
+        return jsonify({"error": "comment_id and message are required"}), 400
+
+    try:
+        result = reply_to_comment(comment_id, message)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 if __name__ == "__main__":
     app.run()
