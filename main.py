@@ -3,7 +3,7 @@ import threading
 import requests
 import os
 from google_sheet import get_active_pages
-from watch_comments import subscribe_page_to_webhooks
+from watch_comments import subscribe_page_to_webhooks, watch_new_comments
 from reply import reply_to_comment
 
 app = Flask(__name__)
@@ -41,8 +41,8 @@ def watch_comments():
 def start_thread_once():
     global thread_started
     if not thread_started:
-        print("🚀 Lancement du thread une seule fois")
-        threading.Thread(target=watch_comments).start()
+        print("🚀 Lancement du thread de surveillance des commentaires")
+        threading.Thread(target=watch_new_comments, daemon=True).start()
         thread_started = True
 
 @app.route("/")
