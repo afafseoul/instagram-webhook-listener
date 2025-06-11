@@ -10,10 +10,13 @@ MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_COMMENTS")
 last_seen_comments = {}
 
 def subscribe_page_to_webhooks(page_id):
-    """Abonne la page Facebook aux webhooks Instagram."""
+    """Abonne la page Facebook aux webhooks pour recevoir les commentaires Instagram."""
     url = f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps"
     payload = {
-        "subscribed_fields": "instagram_comments",
+        # Selon la documentation Meta Graph API, le champ correct est
+        # "comments" afin de recevoir les commentaires Instagram relayés
+        # via la Page Facebook associée.
+        "subscribed_fields": "comments",
         "access_token": META_TOKEN,
     }
     try:
