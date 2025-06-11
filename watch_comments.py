@@ -9,6 +9,24 @@ MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_COMMENTS")
 # Cache local pour suivre les commentaires déjà vus
 last_seen_comments = {}
 
+def subscribe_page_to_webhooks(page_id):
+    """Abonne la page Facebook aux webhooks Instagram."""
+    url = f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps"
+    payload = {
+        "subscribed_fields": "instagram_comments",
+        "access_token": META_TOKEN,
+    }
+    try:
+        response = requests.post(url, data=payload)
+        if response.ok:
+            print(f"✅ Page {page_id} abonnée aux webhooks")
+        else:
+            print(
+                f"⚠️ Échec abonnement page {page_id}: {response.status_code} {response.text}"
+            )
+    except Exception as e:
+        print(f"❌ Exception abonnement page {page_id}: {e}")
+
 def get_comments(instagram_id):
     url = f"https://graph.facebook.com/v19.0/{instagram_id}/media?fields=id,comments{{id,text,timestamp,username}}&access_token={META_TOKEN}"
     try:

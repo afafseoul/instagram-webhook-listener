@@ -3,9 +3,22 @@ import threading
 import requests
 import os
 from google_sheet import get_active_pages
+from watch_comments import subscribe_page_to_webhooks
 
 app = Flask(__name__)
 thread_started = False  # Flag global
+
+def subscribe_all_pages():
+    """Abonne toutes les pages configurées aux webhooks."""
+    try:
+        pages = get_active_pages()
+        for page in pages:
+            subscribe_page_to_webhooks(page["page_id"])
+    except Exception as e:
+        print(f"❌ Erreur abonnement pages : {e}")
+
+# Souscription immédiate au démarrage de l'application
+subscribe_all_pages()
 
 def watch_comments():
     print("🧠 Début du thread de détection de commentaires")
@@ -18,7 +31,10 @@ def watch_comments():
 
     print("🔁 Boucle de vérification des pages actives :")
     for pid in page_ids:
-        print(f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})")
+        print(
+            f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})"
+        )
+        subscribe_page_to_webhooks(pid["page_id"])
 
 @app.before_request
 def start_thread_once():
