@@ -3,35 +3,34 @@ import time
 import requests
 from google_sheet import fetch_page_ids
 
-META_TOKEN = os.environ.get("META_SYSTEM_TOKEN")
+# Token système déjà fourni via les variables d'environnement
+system_token = os.environ.get("META_SYSTEM_TOKEN")
 MAKE_WEBHOOK = os.environ.get("MAKE_WEBHOOK_COMMENTS")
 
 # Cache local pour suivre les commentaires déjà vus
 last_seen_comments = {}
 
-def subscribe_page_to_webhooks(page_id):
-    """Abonne la page Facebook aux webhooks pour recevoir les commentaires Instagram."""
-    url = f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps"
+def subscribe_ig_account_to_webhooks(instagram_business_id):
+    """Abonne le compte Instagram Business aux webhooks pour les commentaires."""
+    url = f"https://graph.facebook.com/v19.0/{instagram_business_id}/subscribed_apps"
     payload = {
-        # Selon la documentation Meta Graph API, le champ correct est
-        # "comments" afin de recevoir les commentaires Instagram relayés
-        # via la Page Facebook associée.
-        "subscribed_fields": "comments",
-        "access_token": META_TOKEN,
+        # Pour les commentaires Instagram, le champ à souscrire est 'instagram_comments'
+        "subscribed_fields": "instagram_comments",
+        "access_token": system_token,
     }
     try:
         response = requests.post(url, data=payload)
         if response.ok:
-            print(f"✅ Page {page_id} abonnée aux webhooks")
+            print(f"✅ IBA {instagram_business_id} abonné aux webhooks")
         else:
             print(
-                f"⚠️ Échec abonnement page {page_id}: {response.status_code} {response.text}"
+                f"⚠️ Échec abonnement IBA {instagram_business_id}: {response.status_code} {response.text}"
             )
     except Exception as e:
-        print(f"❌ Exception abonnement page {page_id}: {e}")
+        print(f"❌ Exception abonnement IBA {instagram_business_id}: {e}")
 
 def get_comments(instagram_id):
-    url = f"https://graph.facebook.com/v19.0/{instagram_id}/media?fields=id,comments{{id,text,timestamp,username}}&access_token={META_TOKEN}"
+    url = f"https://graph.facebook.com/v19.0/{instagram_id}/media?fields=id,comments{{id,text,timestamp,username}}&access_token={system_token}"
     try:
         res = requests.get(url)
         res.raise_for_status()

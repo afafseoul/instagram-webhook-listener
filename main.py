@@ -3,18 +3,18 @@ import threading
 import requests
 import os
 from google_sheet import get_active_pages
-from watch_comments import subscribe_page_to_webhooks, watch_new_comments
+from watch_comments import subscribe_ig_account_to_webhooks, watch_new_comments
 from reply import reply_to_comment
 
 app = Flask(__name__)
 thread_started = False  # Flag global
 
 def subscribe_all_pages():
-    """Abonne toutes les pages configurées aux webhooks."""
+    """Abonne tous les comptes Instagram Business configurés aux webhooks."""
     try:
         pages = get_active_pages()
         for page in pages:
-            subscribe_page_to_webhooks(page["page_id"])
+            subscribe_ig_account_to_webhooks(page["instagram_id"])
     except Exception as e:
         print(f"❌ Erreur abonnement pages : {e}")
 
@@ -35,7 +35,7 @@ def watch_comments():
         print(
             f"➡️ Page active : {pid['page_id']} (Instagram : {pid['instagram_id']}, Client : {pid['client_name']})"
         )
-        subscribe_page_to_webhooks(pid["page_id"])
+        subscribe_ig_account_to_webhooks(pid["instagram_id"])
 
 @app.before_request
 def start_thread_once():
