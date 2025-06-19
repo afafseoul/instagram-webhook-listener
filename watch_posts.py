@@ -1,64 +1,64 @@
-import os
-import time
-import threading
-from typing import List, Dict
+"""Functions to detect new Instagram posts for Facebook pages."""
+
 import requests
+from typing import Optional, Dict
 
-from google_sheet import get_instagram_ids
-from reply import send_to_make_webhook
-
-ACCESS_TOKEN = os.getenv("META_SYSTEM_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_MAKE_POST")
-
-seen_posts = set()
+last_seen: Dict[str, str] = {}
 
 
-def fetch_posts(instagram_id: str) -> List[Dict]:
-    """Retrieve posts for a given Instagram Business ID."""
-    url = f"https://graph.facebook.com/v19.0/{instagram_id}/media"
+def _get_instagram_id(page_id: str, token: str) -> Optional[str]:
+    """Return the Instagram business account ID for the given Facebook page."""
+    url = f"https://graph.facebook.com/v19.0/{page_id}"
+    params = {"fields": "instagram_business_account", "access_token": token}
+    try:
+        res = requests.get(url, params=params)
+        res.raise_for_status()
+        data = res.json()
+        iba = data.get("instagram_business_account", {})
+        return iba.get("id")
+    except Exception as exc:
+        print(f"❌ Failed to get Instagram ID for {page_id}: {exc}")
+        return None
+
+
+def _fetch_latest_post(ig_id: str, token: str) -> Optional[Dict]:
+    """Retrieve the latest media post for an Instagram business account."""
+    url = f"https://graph.facebook.com/v19.0/{ig_id}/media"
     params = {
-        "access_token": ACCESS_TOKEN,
-        "fields": "id,caption,media_type,media_url,permalink,timestamp,username",
+        "fields": "id,timestamp,caption,media_type,permalink",
+        "limit": 1,
+        "access_token": token,
     }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    data = response.json()
-    return data.get("data", [])
+    try:
+        res = requests.get(url, params=params)
+        res.raise_for_status()
+        data = res.json().get("data", [])
+        return data[0] if data else None
+    except Exception as exc:
+        print(f"❌ Failed to fetch posts for {ig_id}: {exc}")
+        return None
 
 
-def check_new_posts() -> None:
-    """Check the accounts for new posts and send them to Make if unseen."""
-    if not ACCESS_TOKEN:
-        raise RuntimeError("META_SYSTEM_TOKEN environment variable is not set")
-    if not WEBHOOK_URL:
-        raise RuntimeError("WEBHOOK_MAKE_POST environment variable is not set")
+def check_new_posts(page_id: str, token: str) -> Optional[Dict]:
+    """Return information about the latest post if it hasn't been seen yet."""
+    ig_id = _get_instagram_id(page_id, token)
+    if not ig_id:
+        return None
 
-    instagram_ids = get_instagram_ids()
-    for ig_id in instagram_ids:
-        try:
-            posts = fetch_posts(ig_id)
-            for post in posts:
-                post_id = post.get("id")
-                if post_id and post_id not in seen_posts:
-                    send_to_make_webhook(post, WEBHOOK_URL)
-                    seen_posts.add(post_id)
-        except Exception as exc:
-            print(f"❌ Error fetching posts for {ig_id}: {exc}")
+    post = _fetch_latest_post(ig_id, token)
+    if not post:
+        return None
 
-
-def watch_new_posts(interval: int = 10) -> None:
-    """Continuously watch for new posts every `interval` seconds."""
-    print("🟢 Starting post watcher")
-    while True:
-        check_new_posts()
-        time.sleep(interval)
-
-
-def start_post_watcher(interval: int = 10) -> None:
-    """Start the post watcher in a separate daemon thread."""
-    thread = threading.Thread(target=watch_new_posts, args=(interval,), daemon=True)
-    thread.start()
-
-
-if __name__ == "__main__":
-    watch_new_posts()
+    last_id = last_seen.get(page_id)
+    post_id = post.get("id")
+    if post_id and post_id != last_id:
+        last_seen[page_id] = post_id
+        return {
+            "page_id": page_id,
+            "media_id": post_id,
+            "timestamp": post.get("timestamp"),
+            "caption": post.get("caption"),
+            "media_type": post.get("media_type"),
+            "permalink": post.get("permalink"),
+        }
+    return None
