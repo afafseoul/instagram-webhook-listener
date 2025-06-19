@@ -34,3 +34,15 @@ def reply_to_comment(comment_id: str, message: str) -> Dict:
     except requests.RequestException as exc:
         raise RuntimeError(f"Request to Meta API failed: {exc}") from exc
 
+
+def send_to_make_webhook(post_data: Dict, webhook_url: str) -> None:
+    """Send post data to the provided Make.com webhook."""
+    if not webhook_url:
+        raise RuntimeError("Webhook URL is missing")
+
+    try:
+        response = requests.post(webhook_url, json=post_data)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Failed to send data to Make webhook: {exc}") from exc
+
