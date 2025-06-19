@@ -1,24 +1,35 @@
-def fetch_page_ids():
-    print("⚙️ Mode test : utilisation des IDs en dur")
+from typing import List
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-    page_ids = [
-        {
-            "page_id": "17841464324220975",  # Page Gestion J-C
-            "instagram_id": "17850965606804656",  # Remplace par l'ID Instagram réel
-            "client_name": "Gestion J-C"
-        },
-        {
-            "page_id": "17841470887313402",  # Page Gestion J-E
-            "instagram_id": "17850965606804656",  # Remplace par l'ID Instagram réel
-            "client_name": "Gestion J-E"
-        }
+GOOGLE_CREDENTIALS_PATH = "/etc/secrets/credentials.json"
+SHEET_NAME = "Commanda - Clients actifs"
+COLUMN_INDEX = 3  # Column C
+
+
+def _get_sheet():
+    """Authenticate and return the first worksheet of the spreadsheet."""
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive",
     ]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        GOOGLE_CREDENTIALS_PATH, scope
+    )
+    client = gspread.authorize(creds)
+    return client.open(SHEET_NAME).sheet1
 
-    print(f"✅ Total pages en dur : {len(page_ids)}")
-    for entry in page_ids:
-        print(f"➡️ Page : {entry['page_id']} - Insta : {entry['instagram_id']} - Client : {entry['client_name']}")
-    
-    return page_ids
 
-# Pour compatibilité avec les autres modules
-get_active_pages = fetch_page_ids
+def get_instagram_ids() -> List[str]:
+    """Return Instagram Business IDs from column C of the Google Sheet."""
+    sheet = _get_sheet()
+    raw_values = sheet.col_values(COLUMN_INDEX)
+    ids: List[str] = []
+    for value in raw_values:
+        value = value.strip()
+        if not value or value.lower().startswith("instagram"):
+            continue
+        ids.append(value)
+    return ids
