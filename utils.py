@@ -18,7 +18,7 @@ def graph_get(endpoint: str, params: dict) -> dict:
 
 def get_long_token(code: str):
     try:
-        redirect_uri = os.getenv("BASE_REDIRECT_URL").replace("/after-auth.html", "/callback")
+        redirect_uri = "https://instagram-webhook-listener.onrender.com/callback"
         params = {
             "client_id": APP_ID,
             "client_secret": APP_SECRET,
