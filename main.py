@@ -63,17 +63,16 @@ def oauth_callback():
         insta_id = insta_data["id"]
 
         # ✅ Étape 3 : stockage dans Supabase
-        supabase.table("clients").insert({
+        supabase.table("instagram_tokens").insert({
             "access_token": token,
             "page_id": page_id,
             "page_name": page_data.get("name", ""),
             "instagram_id": insta_id,
-            "instagram_username": insta_data.get("username", ""),
-            "client_email": email
+            "instagram_username": insta_data.get("username", "")
         }).execute()
 
         # ✅ Étape 4 : notifications
-        confirmation = f"Page : {page_data.get('name', '')}\nIG : {insta_data.get('username', '')}\nEmail : {email}"
+        confirmation = f"Page : {page_data.get('name', '')}\nIG : {insta_data.get('username', '')}"
         send_email(ADMIN_EMAIL, "✅ Nouveau client lié", confirmation)
 
         # ✅ Étape 5 : redirection finale vers la page du site
