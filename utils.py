@@ -25,8 +25,11 @@ def get_long_token(code: str):
             "redirect_uri": redirect_uri,
             "code": code,
         }
+
+        print("🔁 Exchange code → short token...")
         data = graph_get("oauth/access_token", params)
         short_token = data.get("access_token")
+        print("✅ short_token:", short_token)
 
         long_params = {
             "grant_type": "fb_exchange_token",
@@ -34,15 +37,22 @@ def get_long_token(code: str):
             "client_secret": APP_SECRET,
             "fb_exchange_token": short_token,
         }
+
+        print("🔁 Exchange short → long token...")
         long_data = graph_get("oauth/access_token", long_params)
         token = long_data.get("access_token")
-        if int(long_data.get("expires_in", 0)) < 3600:
+        expires_in = long_data.get("expires_in", 0)
+        print(f"✅ long_token: {token} (expires_in={expires_in}s)")
+
+        if int(expires_in) < 3600:
             raise Exception("Token trop court")
 
         me = graph_get("me", {"fields": "email", "access_token": token})
         email = me.get("email", "")
         return token, email, None
+
     except Exception as e:
+        print("❌ get_long_token ERROR:", str(e))
         return None, None, str(e)
 
 
