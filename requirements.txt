@@ -1,5 +1,5 @@
 flask
 requests
+supabase-py
+python-dotenv
 gunicorn
-gspread
-oauth2client
