@@ -19,35 +19,40 @@ def graph_get(endpoint: str, params: dict) -> dict:
 def get_long_token(code: str):
     try:
         redirect_uri = "https://instagram-webhook-listener.onrender.com/callback"
+
+        # 🔁 Étape 1 : code → short token
+        print("🔁 Exchange code → short token...")
         params = {
             "client_id": APP_ID,
             "client_secret": APP_SECRET,
             "redirect_uri": redirect_uri,
             "code": code,
         }
-
-        print("🔁 Exchange code → short token...")
         data = graph_get("oauth/access_token", params)
         short_token = data.get("access_token")
+        if not short_token:
+            raise Exception("Impossible de récupérer le token court terme")
         print("✅ short_token:", short_token)
 
+        # 🔁 Étape 2 : short token → long token
+        print("🔁 Exchange short → long token...")
         long_params = {
             "grant_type": "fb_exchange_token",
             "client_id": APP_ID,
             "client_secret": APP_SECRET,
             "fb_exchange_token": short_token,
         }
-
-        print("🔁 Exchange short → long token...")
         long_data = graph_get("oauth/access_token", long_params)
         token = long_data.get("access_token")
         expires_in = long_data.get("expires_in", 0)
+        if not token:
+            raise Exception("Impossible d’obtenir le token long terme")
         print(f"✅ long_token: {token} (expires_in={expires_in}s)")
 
-        if int(long_data.get("expires_in", 0)) < 60:
-        print("⚠️ Attention : token court")
+        if int(expires_in) < 60:
+            print("⚠️ Attention : token long terme très court (peut être invalide)")
 
-
+        # 🔁 Étape 3 : récupérer email utilisateur
         me = graph_get("me", {"fields": "email", "access_token": token})
         email = me.get("email", "")
         return token, email, None
@@ -74,6 +79,7 @@ def fetch_instagram_data(token: str):
     ig_acc = page.get("instagram_business_account")
     if not ig_acc:
         raise Exception("Page non liée à Instagram")
+
     ig_id = ig_acc["id"]
     ig_info = graph_get(ig_id, {"fields": "username", "access_token": token})
     return page, {"id": ig_id, "username": ig_info.get("username", "")}
