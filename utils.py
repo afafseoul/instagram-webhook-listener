@@ -44,8 +44,9 @@ def get_long_token(code: str):
         expires_in = long_data.get("expires_in", 0)
         print(f"✅ long_token: {token} (expires_in={expires_in}s)")
 
-        if int(expires_in) < 3600:
-            raise Exception("Token trop court")
+        if int(long_data.get("expires_in", 0)) < 60:
+        print("⚠️ Attention : token court")
+
 
         me = graph_get("me", {"fields": "email", "access_token": token})
         email = me.get("email", "")
