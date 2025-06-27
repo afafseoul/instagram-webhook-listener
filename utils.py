@@ -2,7 +2,7 @@ from flask import Flask, request, redirect
 import os
 import requests
 from supabase import create_client
-from utils import get_long_token, verify_token_permissions, fetch_instagram_data
+
 
 app = Flask(__name__)
 
