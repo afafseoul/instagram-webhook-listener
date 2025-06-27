@@ -3,3 +3,4 @@ requests
 supabase
 python-dotenv
 gunicorn
+psycopg2-binary
