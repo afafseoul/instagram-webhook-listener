@@ -22,7 +22,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 @app.route("/oauth")
 def oauth_start():
     client_id = os.getenv("META_CLIENT_ID")
-    redirect_uri = os.getenv("META_REDIRECT_URI")
+    redirect_uri = os.getenv("BASE_REDIRECT_URL")
     scope = ",".join([
         "pages_show_list",
         "instagram_basic",
@@ -41,7 +41,7 @@ def oauth_callback():
     if not code:
         return "❌ Erreur : Code OAuth manquant"
 
-    redirect_uri = os.getenv("META_REDIRECT_URI")
+    redirect_uri = os.getenv("BASE_REDIRECT_URL")
     token, expires_at, error = get_long_token(code, redirect_uri)
     if error:
         send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
