@@ -86,7 +86,6 @@ def oauth_callback():
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        # Envoi vers Make.com
         send_email(
             ADMIN_EMAIL,
             "✅ Nouveau token client",
@@ -100,14 +99,33 @@ def oauth_callback():
         📸 <b>Instagram</b> : {username}<br><br>
         🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
         <br>
-        <a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>
+        <a href="https://instagram-webhook-listener.onrender.com/oauth">Retour</a>
         """
 
     except Exception as e:
+        if "OAuthException" in str(e) and "does not have access" in str(e):
+            try:
+                page_resp = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={"access_token": token}).json()
+                page = page_resp.get("data", [{}])[0]
+                page_name = page.get("name", "inconnue")
+            except:
+                page_name = "inconnue"
+
+            try:
+                user_resp = requests.get("https://graph.facebook.com/v19.0/me?fields=name", params={"access_token": token}).json()
+                user_name = user_resp.get("name", "utilisateur inconnu")
+            except:
+                user_name = "utilisateur inconnu"
+
+            msg = f"❌ Erreur : Le compte Facebook <b>{user_name}</b> n'est pas administrateur de la page <b>{page_name}</b>."
+            print(msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            return f"<h2 style='color:red'>{msg}</h2>"
+
         msg = f"❌ Erreur post-OAuth : {str(e)}"
         print(msg)
         send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
-        return msg
+        return f"<h2 style='color:red'>{msg}</h2>"
 
 if __name__ == "__main__":
     app.run()
