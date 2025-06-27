@@ -1,101 +1,95 @@
+from flask import Flask, request, redirect
 import os
 import requests
+from supabase import create_client
+from utils import get_long_token, verify_token_permissions, fetch_instagram_data
 
-GRAPH_BASE = "https://graph.facebook.com/v19.0"
-APP_ID = os.getenv("META_CLIENT_ID")
-APP_SECRET = os.getenv("META_CLIENT_SECRET")
+app = Flask(__name__)
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
-def graph_get(endpoint: str, params: dict) -> dict:
-    url = f"{GRAPH_BASE}/{endpoint}"
-    res = requests.get(url, params=params, timeout=10)
-    data = res.json()
-    if res.status_code != 200:
-        msg = data.get("error", {}).get("message", "Unknown error")
-        raise Exception(msg)
-    return data
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+MAKE_WEBHOOK_EMAIL = "https://hook.eu2.make.com/lgkj7kr5nec5ijv1mo08jq03ikjv3t1y"
 
-def get_long_token(code: str):
+def send_email(to, subject, body):
     try:
-        redirect_uri = "https://instagram-webhook-listener.onrender.com/callback"
-
-        # 🔁 Étape 1 : code → short token
-        print("🔁 Exchange code → short token...")
-        params = {
-            "client_id": APP_ID,
-            "client_secret": APP_SECRET,
-            "redirect_uri": redirect_uri,
-            "code": code,
-        }
-        data = graph_get("oauth/access_token", params)
-        short_token = data.get("access_token")
-        if not short_token:
-            raise Exception("Impossible de récupérer le token court terme")
-        print("✅ short_token:", short_token)
-
-        # 🔁 Étape 2 : short token → long token
-        print("🔁 Exchange short → long token...")
-        long_params = {
-            "grant_type": "fb_exchange_token",
-            "client_id": APP_ID,
-            "client_secret": APP_SECRET,
-            "fb_exchange_token": short_token,
-        }
-        long_data = graph_get("oauth/access_token", long_params)
-        token = long_data.get("access_token")
-        expires_in = long_data.get("expires_in", 0)
-        if not token:
-            raise Exception("Impossible d’obtenir le token long terme")
-        print(f"✅ long_token: {token} (expires_in={expires_in}s)")
-
-        if int(expires_in) < 60:
-            print("⚠️ Attention : token long terme très court (peut être invalide)")
-
-        # 🔁 Étape 3 : récupérer email utilisateur
-        me = graph_get("me", {"fields": "email", "access_token": token})
-        email = me.get("email", "")
-        return token, email, None
-
-    except Exception as e:
-        print("❌ get_long_token ERROR:", str(e))
-        return None, None, str(e)
-
-
-def verify_token_permissions(token: str) -> None:
-    # Vérifie qu'on peut accéder aux données nécessaires
-    graph_get("me", {"fields": "id", "access_token": token})
-    graph_get("me/accounts", {"access_token": token})
-
-
-def fetch_instagram_data(token: str):
-    pages = graph_get(
-        "me/accounts",
-        {"fields": "id,name,instagram_business_account", "access_token": token},
-    ).get("data", [])
-    if not pages:
-        raise Exception("Aucune page accessible")
-
-    page = pages[0]
-    ig_acc = page.get("instagram_business_account")
-    if not ig_acc:
-        raise Exception("Page non liée à Instagram")
-
-    ig_id = ig_acc["id"]
-    ig_info = graph_get(ig_id, {"fields": "username", "access_token": token})
-    return page, {"id": ig_id, "username": ig_info.get("username", "")}
-
-
-def send_email(to: str, subject: str, body: str):
-    key = os.getenv("MAILGUN_API_KEY")
-    return requests.post(
-        "https://api.mailgun.net/v3/sandbox.mailgun.org/messages",
-        auth=("api", key),
-        data={
-            "from": "Commanda <mailgun@sandbox.mailgun.org>",
+        requests.post(MAKE_WEBHOOK_EMAIL, json={
             "to": to,
             "subject": subject,
-            "text": body,
-        },
-        timeout=10,
+            "body": body
+        }, timeout=10)
+    except Exception as e:
+        print("❌ Erreur envoi email via Make:", str(e))
+
+
+@app.route("/oauth")
+def oauth_start():
+    client_id = os.getenv("META_CLIENT_ID")
+    redirect_uri = f"{request.url_root}callback"
+    scope = ",".join([
+        "pages_show_list",
+        "instagram_basic",
+        "instagram_manage_comments",
+        "pages_manage_metadata",
+        "pages_read_engagement"
+    ])
+    return redirect(
+        f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code"
     )
+
+
+@app.route("/callback")
+def oauth_callback():
+    code = request.args.get("code")
+    if not code:
+        return "❌ Erreur : Code OAuth manquant"
+
+    redirect_uri = f"{request.url_root}callback"
+    token, expires_at, error = get_long_token(code, redirect_uri)
+    if error:
+        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
+        return error
+
+    try:
+        # Vérifie que le token est valide et récupère les données
+        verify_token_permissions(token)
+        page_data, insta_data = fetch_instagram_data(token)
+
+        page_id = page_data["id"]
+        page_name = page_data.get("name", "")
+        insta_id = insta_data["id"]
+        username = insta_data.get("username", "")
+
+        # Stocker dans Supabase
+        supabase.table("clients").insert({
+            "access_token": token,
+            "expires_at": expires_at,
+            "page_id": page_id,
+            "page_name": page_name,
+            "instagram_id": insta_id,
+            "instagram_username": username
+        }).execute()
+
+        # Envoi par email via Make
+        send_email(
+            ADMIN_EMAIL,
+            "✅ Nouveau token client",
+            f"📄 Token long terme :\n{token}\n\nExpire le : {expires_at}\n\nPage : {page_name}\nIG : {username}"
+        )
+
+        return redirect(
+            f"{BASE_REDIRECT_URL}?success=1&page={page_name}&ig={username}"
+        )
+
+    except Exception as e:
+        msg = f"❌ Erreur post-OAuth : {str(e)}"
+        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+        return msg
+
+
+if __name__ == "__main__":
+    app.run()
