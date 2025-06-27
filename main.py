@@ -58,7 +58,7 @@ def oauth_callback():
         username = insta_data.get("username", "")
 
         # Stocker dans Supabase
-        supabase.table("clients").insert({
+        supabase.table("instagram_tokens").insert({
             "access_token": token,
             "token_expires_": expires_at.isoformat() if expires_at else None,
             "page_id": page_id,
