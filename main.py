@@ -99,7 +99,7 @@ def oauth_callback():
         📸 <b>Instagram</b> : {username}<br><br>
         🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
         <br>
-        <a href="https://instagram-webhook-listener.onrender.com/oauth">Retour</a>
+        <a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>
         """
 
     except Exception as e:
