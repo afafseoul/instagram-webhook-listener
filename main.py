@@ -11,7 +11,8 @@ from utils import (
 app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY")
+# Allow both SUPABASE_KEY and SUPABASE_SERVICE_KEY for backward compatibility
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
