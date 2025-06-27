@@ -103,7 +103,9 @@ def oauth_callback():
         """
 
     except Exception as e:
-        if "OAuthException" in str(e) and "does not have access" in str(e):
+        error_text = str(e)
+
+        if "OAuthException" in error_text and ("does not have access" in error_text or "not authorized" in error_text):
             try:
                 page_resp = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={"access_token": token}).json()
                 page = page_resp.get("data", [{}])[0]
@@ -122,7 +124,17 @@ def oauth_callback():
             send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        msg = f"❌ Erreur post-OAuth : {str(e)}"
+        if "connected_instagram_account" in error_text:
+            try:
+                page_name = page_data.get("name", "inconnue")
+            except:
+                page_name = "inconnue"
+            msg = f"❌ Erreur : La page <b>{page_name}</b> n'est pas liée à un compte Instagram professionnel."
+            print(msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            return f"<h2 style='color:red'>{msg}</h2>"
+
+        msg = f"❌ Erreur post-OAuth : {error_text}"
         print(msg)
         send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
         return f"<h2 style='color:red'>{msg}</h2>"
