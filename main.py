@@ -60,11 +60,11 @@ def oauth_callback():
         # Stocker dans Supabase
         supabase.table("instagram_tokens").insert({
             "access_token": token,
-            "token_expires_": expires_at.isoformat() if expires_at else None,
+            "token_expires_at": expires_at.isoformat() if expires_at else None,
             "page_id": page_id,
             "page_name": page_name,
             "instagram_id": insta_id,
-            "instagram_use": username,
+            "instagram_username": username,
             "status_verified": True,
         }).execute()
 
