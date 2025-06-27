@@ -1,35 +1,27 @@
 from flask import Flask, request, redirect
 import os
-import requests
 from supabase import create_client
-from utils import verify_token_permissions, fetch_instagram_data
+from utils import (
+    verify_token_permissions,
+    fetch_instagram_data,
+    get_long_token,
+    send_email,
+)
 
 app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-MAKE_WEBHOOK_EMAIL = "https://hook.eu2.make.com/lgkj7kr5nec5ijv1mo08jq03ikjv3t1y"
-
-def send_email(to, subject, body):
-    try:
-        requests.post(MAKE_WEBHOOK_EMAIL, json={
-            "to": to,
-            "subject": subject,
-            "body": body
-        }, timeout=10)
-    except Exception as e:
-        print("❌ Erreur envoi email via Make:", str(e))
-
 
 @app.route("/oauth")
 def oauth_start():
     client_id = os.getenv("META_CLIENT_ID")
-    redirect_uri = f"{request.url_root}callback"
+    redirect_uri = os.getenv("META_REDIRECT_URI")
     scope = ",".join([
         "pages_show_list",
         "instagram_basic",
@@ -48,7 +40,7 @@ def oauth_callback():
     if not code:
         return "❌ Erreur : Code OAuth manquant"
 
-    redirect_uri = f"{request.url_root}callback"
+    redirect_uri = os.getenv("META_REDIRECT_URI")
     token, expires_at, error = get_long_token(code, redirect_uri)
     if error:
         send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
@@ -67,14 +59,15 @@ def oauth_callback():
         # Stocker dans Supabase
         supabase.table("clients").insert({
             "access_token": token,
-            "expires_at": expires_at,
+            "token_expires_": expires_at.isoformat() if expires_at else None,
             "page_id": page_id,
             "page_name": page_name,
             "instagram_id": insta_id,
-            "instagram_username": username
+            "instagram_use": username,
+            "status_verified": True,
         }).execute()
 
-        # Envoi par email via Make
+        # Envoi d'un email de notification
         send_email(
             ADMIN_EMAIL,
             "✅ Nouveau token client",
