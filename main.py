@@ -1,11 +1,11 @@
 from flask import Flask, request, redirect
 import os
 from supabase import create_client
+import requests
 from utils import (
     verify_token_permissions,
     fetch_instagram_data,
     get_long_token,
-    send_email,
 )
 
 app = Flask(__name__)
@@ -14,13 +14,28 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+MAKE_WEBHOOK_EMAIL = os.getenv("MAKE_WEBHOOK_EMAIL")  # Ton URL Make
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+
+def send_email(to, subject, message):
+    payload = {
+        "to": to,
+        "subject": subject,
+        "message": message
+    }
+    print("📬 ENVOI À MAKE :", payload)
+    try:
+        requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
+    except Exception as e:
+        print("❌ Erreur envoi Make.com :", str(e))
+
 
 @app.route("/oauth")
 def oauth_start():
     client_id = os.getenv("META_CLIENT_ID")
-    redirect_uri = os.getenv("BASE_REDIRECT_URL")
+    redirect_uri = BASE_REDIRECT_URL
     scope = ",".join([
         "pages_show_list",
         "instagram_basic",
@@ -29,33 +44,34 @@ def oauth_start():
         "pages_read_engagement"
     ])
     return redirect(
-        f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=ok"
+        f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=123"
     )
+
 
 @app.route("/callback")
 def oauth_callback():
+    code = request.args.get("code")
+    if not code:
+        return "❌ <b>Erreur :</b> Code OAuth manquant"
+
     print("🔁 URL reçue :", request.url)
     print("📦 Params GET:", dict(request.args))
 
-    code = request.args.get("code")
-    if not code:
-        return "❌ Erreur : Code OAuth manquant"
-
-    redirect_uri = os.getenv("BASE_REDIRECT_URL")
+    redirect_uri = BASE_REDIRECT_URL
     token, expires_at, error = get_long_token(code, redirect_uri)
 
     if error:
         send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
-        return error
+        return f"❌ Erreur récupération token : {error}"
 
     try:
         verify_token_permissions(token)
         page_data, insta_data = fetch_instagram_data(token)
 
-        page_id = page_data.get("id")
-        page_name = page_data.get("name", "None")
-        insta_id = insta_data.get("id")
-        username = insta_data.get("username", "None")
+        page_id = page_data["id"]
+        page_name = page_data.get("name", "")
+        insta_id = insta_data["id"]
+        username = insta_data.get("username", "")
 
         print("✅ Code reçu :", code)
         print("📄 Page :", page_name)
@@ -71,20 +87,29 @@ def oauth_callback():
             "status_verified": True,
         }).execute()
 
+        # Envoi vers Make.com
         send_email(
             ADMIN_EMAIL,
             "✅ Nouveau token client",
-            f"📄 Token long terme :\n{token}\n\nExpire le : {expires_at}\n\nPage : {page_name}\nIG : {username}"
+            f"📄 Token long terme : {token[:50]}...\n\nExpire le : {expires_at}\nPage : {page_name}\nIG : {username}"
         )
 
-        return redirect(
-            f"{BASE_REDIRECT_URL}?success=1&page={page_name}&ig={username}"
-        )
+        return f"""
+        ✅ <b>Connexion réussie !</b><br><br>
+        🔑 <b>Token reçu</b> : {token[:50]}...<br>
+        📄 <b>Page</b> : {page_name}<br>
+        📸 <b>Instagram</b> : {username}<br><br>
+        🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
+        <br>
+        <a href="https://instagram-webhook-listener.onrender.com/oauth">Retour</a>
+        """
 
     except Exception as e:
         msg = f"❌ Erreur post-OAuth : {str(e)}"
+        print(msg)
         send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
         return msg
+
 
 if __name__ == "__main__":
     app.run()
