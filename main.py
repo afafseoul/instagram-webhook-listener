@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
-BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")  # ex: https://www.commanda.site/after-auth.html
+BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -48,30 +48,26 @@ def oauth_callback():
     if not code:
         return "❌ Erreur : Code OAuth manquant"
 
-    token_temp, _, error = get_long_token(code)
+    redirect_uri = f"{request.url_root}callback"
+    token, expires_at, error = get_long_token(code, redirect_uri)
     if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth (token court)", error)
+        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
         return error
 
     try:
-        # Étapes de vérification avec token temporaire
-        verify_token_permissions(token_temp)
-        page_data, insta_data = fetch_instagram_data(token_temp)
+        # Vérifie que le token est valide et récupère les données
+        verify_token_permissions(token)
+        page_data, insta_data = fetch_instagram_data(token)
 
         page_id = page_data["id"]
         page_name = page_data.get("name", "")
         insta_id = insta_data["id"]
         username = insta_data.get("username", "")
 
-        # Générer token longue durée
-        long_token, _, err2 = get_long_token(code)
-        if err2:
-            send_email(ADMIN_EMAIL, "❌ Échec conversion long token", err2)
-            return err2
-
         # Stocker dans Supabase
         supabase.table("clients").insert({
-            "access_token": long_token,
+            "access_token": token,
+            "expires_at": expires_at,
             "page_id": page_id,
             "page_name": page_name,
             "instagram_id": insta_id,
@@ -82,10 +78,9 @@ def oauth_callback():
         send_email(
             ADMIN_EMAIL,
             "✅ Nouveau token client",
-            f"📄 Token long terme :\n{long_token}\n\nPage : {page_name}\nIG : {username}"
+            f"📄 Token long terme :\n{token}\n\nExpire le : {expires_at}\n\nPage : {page_name}\nIG : {username}"
         )
 
-        # Redirection vers le site
         return redirect(
             f"{BASE_REDIRECT_URL}?success=1&page={page_name}&ig={username}"
         )
