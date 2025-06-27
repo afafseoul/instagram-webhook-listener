@@ -11,7 +11,6 @@ from utils import (
 app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-# Allow both SUPABASE_KEY and SUPABASE_SERVICE_KEY for backward compatibility
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
@@ -37,52 +36,23 @@ def oauth_start():
 
 @app.route("/callback")
 def oauth_callback():
+    print("✅ Requête reçue sur /callback")
+    print("🔎 URL complète:", request.url)
+    print("🔎 Paramètres GET:", dict(request.args))
+
     code = request.args.get("code")
+    page = request.args.get("page")
+    ig = request.args.get("ig")
+
     if not code:
         return "❌ Erreur : Code OAuth manquant"
 
-    redirect_uri = os.getenv("BASE_REDIRECT_URL")
-    token, expires_at, error = get_long_token(code, redirect_uri)
-    if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
-        return error
-
-    try:
-        # Vérifie que le token est valide et récupère les données
-        verify_token_permissions(token)
-        page_data, insta_data = fetch_instagram_data(token)
-
-        page_id = page_data["id"]
-        page_name = page_data.get("name", "")
-        insta_id = insta_data["id"]
-        username = insta_data.get("username", "")
-
-        # Stocker dans Supabase
-        supabase.table("instagram_tokens").insert({
-            "access_token": token,
-            "token_expires_at": expires_at.isoformat() if expires_at else None,
-            "page_id": page_id,
-            "page_name": page_name,
-            "instagram_id": insta_id,
-            "instagram_username": username,
-            "status_verified": True,
-        }).execute()
-
-        # Envoi d'un email de notification
-        send_email(
-            ADMIN_EMAIL,
-            "✅ Nouveau token client",
-            f"📄 Token long terme :\n{token}\n\nExpire le : {expires_at}\n\nPage : {page_name}\nIG : {username}"
-        )
-
-        return redirect(
-            f"{BASE_REDIRECT_URL}?success=1&page={page_name}&ig={username}"
-        )
-
-    except Exception as e:
-        msg = f"❌ Erreur post-OAuth : {str(e)}"
-        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
-        return msg
+    return f"""
+        ✅ Code reçu : {code}<br>
+        📄 Page : {page}<br>
+        📸 IG : {ig}<br>
+        🔁 Redirige manuellement vers : {BASE_REDIRECT_URL}?success=1&page={page}&ig={ig}
+    """
 
 
 if __name__ == "__main__":
