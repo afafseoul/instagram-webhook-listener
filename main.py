@@ -13,7 +13,7 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-MAKE_WEBHOOK_EMAIL = "https://hook.eu2.make.com/lgkj7kr5nec5ijv1mo08jq03ikjv3t1y"  # ton webhook Make
+MAKE_WEBHOOK_EMAIL = "https://hook.eu2.make.com/lgkj7kr5nec5ijv1mo08jq03ikjv3t1y"
 
 def send_email(to, subject, body):
     try:
@@ -23,7 +23,7 @@ def send_email(to, subject, body):
             "body": body
         }, timeout=10)
     except Exception as e:
-        print("Erreur lors de l'envoi de l'email via Make:", str(e))
+        print("❌ Erreur envoi email via Make:", str(e))
 
 
 @app.route("/oauth")
@@ -46,42 +46,52 @@ def oauth_start():
 def oauth_callback():
     code = request.args.get("code")
     if not code:
-        return "Erreur : Code OAuth manquant"
+        return "❌ Erreur : Code OAuth manquant"
 
-    # 🔄 Étape 1 : échange de code contre access_token long terme
-    token, email, error = get_long_token(code)
+    token_temp, _, error = get_long_token(code)
     if error:
-        send_email(ADMIN_EMAIL, "Échec OAuth", error)
+        send_email(ADMIN_EMAIL, "❌ Échec OAuth (token court)", error)
         return error
 
     try:
-        # ✅ Étape 2 : vérification des droits et extraction données
-        verify_token_permissions(token)
-        page_data, insta_data = fetch_instagram_data(token)
+        # Étapes de vérification avec token temporaire
+        verify_token_permissions(token_temp)
+        page_data, insta_data = fetch_instagram_data(token_temp)
 
         page_id = page_data["id"]
+        page_name = page_data.get("name", "")
         insta_id = insta_data["id"]
+        username = insta_data.get("username", "")
 
-        # ✅ Étape 3 : stockage dans Supabase
-        supabase.table("instagram_tokens").insert({
-            "access_token": token,
+        # Générer token longue durée
+        long_token, _, err2 = get_long_token(code)
+        if err2:
+            send_email(ADMIN_EMAIL, "❌ Échec conversion long token", err2)
+            return err2
+
+        # Stocker dans Supabase
+        supabase.table("clients").insert({
+            "access_token": long_token,
             "page_id": page_id,
-            "page_name": page_data.get("name", ""),
+            "page_name": page_name,
             "instagram_id": insta_id,
-            "instagram_username": insta_data.get("username", "")
+            "instagram_username": username
         }).execute()
 
-        # ✅ Étape 4 : notifications
-        confirmation = f"Page : {page_data.get('name', '')}\nIG : {insta_data.get('username', '')}"
-        send_email(ADMIN_EMAIL, "✅ Nouveau client lié", confirmation)
+        # Envoi par email via Make
+        send_email(
+            ADMIN_EMAIL,
+            "✅ Nouveau token client",
+            f"📄 Token long terme :\n{long_token}\n\nPage : {page_name}\nIG : {username}"
+        )
 
-        # ✅ Étape 5 : redirection finale vers la page du site
+        # Redirection vers le site
         return redirect(
-            f"{BASE_REDIRECT_URL}?success=1&page={page_data.get('name','')}&ig={insta_data.get('username','')}"
+            f"{BASE_REDIRECT_URL}?success=1&page={page_name}&ig={username}"
         )
 
     except Exception as e:
-        msg = f"Erreur post-OAuth : {str(e)}"
+        msg = f"❌ Erreur post-OAuth : {str(e)}"
         send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
         return msg
 
