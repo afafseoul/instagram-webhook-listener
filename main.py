@@ -1,115 +1,109 @@
 from flask import Flask, request, redirect
-import os
-from supabase import create_client
 import requests
-from utils import (
-    verify_token_permissions,
-    fetch_instagram_data,
-    get_long_token,
-)
+import os
+import psycopg2
+from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.utils import formataddr
 
 app = Flask(__name__)
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
-BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
-MAKE_WEBHOOK_EMAIL = os.getenv("MAKE_WEBHOOK_EMAIL")  # Ton URL Make
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+META_APP_ID = os.environ.get("META_APP_ID")
+META_APP_SECRET = os.environ.get("META_APP_SECRET")
+FROM_EMAIL = os.environ.get("GMAIL_FROM")
+TO_EMAIL = os.environ.get("GMAIL_TO")
+EMAIL_PASSWORD = os.environ.get("GMAIL_PASS")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+def send_email(subject, body):
+    msg = MIMEText(body, "html")
+    msg["Subject"] = subject
+    msg["From"] = formataddr(("Commanda", FROM_EMAIL))
+    msg["To"] = TO_EMAIL
 
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(FROM_EMAIL, EMAIL_PASSWORD)
+        server.sendmail(FROM_EMAIL, TO_EMAIL, msg.as_string())
 
-def send_email(to, subject, message):
-    payload = {
-        "to": to,
-        "subject": subject,
-        "message": message
-    }
-    print("📬 ENVOI À MAKE :", payload)
-    try:
-        requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
-    except Exception as e:
-        print("❌ Erreur envoi Make.com :", str(e))
-
-
-@app.route("/oauth")
-def oauth_start():
-    client_id = os.getenv("META_CLIENT_ID")
-    redirect_uri = BASE_REDIRECT_URL
-    scope = ",".join([
-        "pages_show_list",
-        "instagram_basic",
-        "instagram_manage_comments",
-        "pages_manage_metadata",
-        "pages_read_engagement"
-    ])
-    return redirect(
-        f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=123"
-    )
-
+def store_in_supabase(page_id, page_name, instagram_id):
+    conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO instagram_tokens (page_id, page_name, instagram_id, created_at)
+        VALUES (%s, %s, %s, %s)
+    """, (page_id, page_name, instagram_id, datetime.utcnow()))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 @app.route("/callback")
-def oauth_callback():
+def callback():
     code = request.args.get("code")
+    state = request.args.get("state")
+
     if not code:
-        return "❌ <b>Erreur :</b> Code OAuth manquant"
+        return "<h2 style='color:red'>❌ Erreur : Code OAuth manquant</h2>"
 
-    print("🔁 URL reçue :", request.url)
-    print("📦 Params GET:", dict(request.args))
+    # Échange code contre token
+    token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+    params = {
+        "client_id": META_APP_ID,
+        "redirect_uri": "https://instagram-webhook-listener.onrender.com/callback",
+        "client_secret": META_APP_SECRET,
+        "code": code,
+    }
+    token_resp = requests.get(token_url, params=params).json()
+    access_token = token_resp.get("access_token")
 
-    redirect_uri = BASE_REDIRECT_URL
-    token, expires_at, error = get_long_token(code, redirect_uri)
+    if not access_token:
+        send_email("❌ Échec post-OAuth", "Impossible de récupérer le token d'accès. Vérifiez le code.")
+        return "<h2 style='color:red'>❌ Erreur post-OAuth : Token non reçu</h2>"
 
-    if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
-        return f"❌ Erreur récupération token : {error}"
+    # Obtenir les pages disponibles
+    pages_resp = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={"access_token": access_token}).json()
+    pages = pages_resp.get("data", [])
 
-    try:
-        verify_token_permissions(token)
-        page_data, insta_data = fetch_instagram_data(token)
+    if not pages:
+        send_email("❌ Échec post-OAuth", "Aucune page accessible. Le compte Facebook utilisé n'est probablement pas admin total de la page. Assurez-vous que l'utilisateur connecté est bien administrateur de la page Facebook liée au compte Instagram.")
+        return "<h2 style='color:red'>❌ Erreur post-OAuth : Aucune page accessible</h2>"
 
-        page_id = page_data["id"]
-        page_name = page_data.get("name", "")
-        insta_id = insta_data["id"]
-        username = insta_data.get("username", "")
+    page = pages[0]  # On prend la première page uniquement
+    page_id = page["id"]
+    page_name = page.get("name", "")
 
-        print("✅ Code reçu :", code)
-        print("📄 Page :", page_name)
-        print("📸 IG :", username)
+    # Obtenir l'ID Instagram lié à cette page
+    ig_resp = requests.get(f"https://graph.facebook.com/v19.0/{page_id}?fields=connected_instagram_account", params={"access_token": access_token}).json()
+    ig = ig_resp.get("connected_instagram_account", {})
+    ig_id = ig.get("id")
 
-        supabase.table("instagram_tokens").insert({
-            "access_token": token,
-            "token_expires_at": expires_at.isoformat() if expires_at else None,
-            "page_id": page_id,
-            "page_name": page_name,
-            "instagram_id": insta_id,
-            "instagram_username": username,
-            "status_verified": True,
-        }).execute()
+    if not ig_id:
+        send_email("❌ Échec post-OAuth", f"La page <b>{page_name}</b> n'a pas de compte Instagram connecté. Assurez-vous qu'un compte IG est bien lié dans les paramètres de la page.")
+        return f"<h2 style='color:red'>❌ Erreur : Aucun compte Instagram relié à la page <b>{page_name}</b></h2>"
 
-        # Envoi vers Make.com
-        send_email(
-            ADMIN_EMAIL,
-            "✅ Nouveau token client",
-            f"📄 Token long terme : {token[:50]}...\n\nExpire le : {expires_at}\nPage : {page_name}\nIG : {username}"
-        )
+    # Enregistrement dans Supabase
+    store_in_supabase(page_id, page_name, ig_id)
 
-        return f"""
-        ✅ <b>Connexion réussie !</b><br><br>
-        🔑 <b>Token reçu</b> : {token[:50]}...<br>
-        📄 <b>Page</b> : {page_name}<br>
-        📸 <b>Instagram</b> : {username}<br><br>
-        🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
-        <br>
-        <a href="https://instagram-webhook-listener.onrender.com/oauth">Retour</a>
-        """
+    # Mail de succès
+    email_body = f"""
+    <h2>✅ Nouveau token enregistré avec succès</h2>
+    <ul>
+      <li><b>Page :</b> {page_name}</li>
+      <li><b>Instagram :</b> {ig_id}</li>
+      <li><b>Page ID :</b> {page_id}</li>
+    </ul>
+    """
+    send_email("✅ Nouveau token client enregistré : " + page_name, email_body)
 
-    except Exception as e:
-        msg = f"❌ Erreur post-OAuth : {str(e)}"
-        print(msg)
-        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
-        return msg
-
+    # Page affichée au client
+    return f"""
+    <h2 style='color:green'>✅ Connexion réussie !</h2>
+    <p>📄 <b>Page</b> : {page_name}</p>
+    <p>📸 <b>Instagram</b> : {ig_id}</p>
+    <p style='color:blue'>🟢 Le token a été stocké et un email a été envoyé.</p>
+    <a href='/'>Retour</a>
+    """
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
