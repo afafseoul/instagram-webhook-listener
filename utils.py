@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 import requests
 
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
@@ -16,9 +17,53 @@ def graph_get(endpoint: str, params: dict) -> dict:
     return data
 
 
+def get_long_token(code: str, redirect_uri: str):
+    """Exchange OAuth code for a long lived token."""
+    try:
+        # Step 1: short lived token
+        data = graph_get(
+            "oauth/access_token",
+            {
+                "client_id": APP_ID,
+                "client_secret": APP_SECRET,
+                "redirect_uri": redirect_uri,
+                "code": code,
+            },
+        )
+        short_token = data.get("access_token")
+        # Step 2: long lived token
+        long_data = graph_get(
+            "oauth/access_token",
+            {
+                "grant_type": "fb_exchange_token",
+                "client_id": APP_ID,
+                "client_secret": APP_SECRET,
+                "fb_exchange_token": short_token,
+            },
+        )
+        token = long_data.get("access_token")
+        exp = long_data.get("expires_in")
+        expires_at = datetime.utcnow() + timedelta(seconds=exp) if exp else None
+        return token, expires_at, None
+    except Exception as e:
+        return None, None, str(e)
+
+
 def verify_token_permissions(token: str) -> None:
-    # Vérifie qu’on a les accès de base
-    graph_get("me", {"fields": "id", "access_token": token})
+    """Ensure token has needed permissions."""
+    system_token = os.getenv("META_SYSTEM_TOKEN") or f"{APP_ID}|{APP_SECRET}"
+    debug = graph_get(
+        "debug_token",
+        {"input_token": token, "access_token": system_token},
+    ).get("data", {})
+    if not debug.get("is_valid"):
+        raise Exception("Token invalide")
+
+    scopes = debug.get("scopes", [])
+    if "instagram_manage_comments" not in scopes:
+        raise Exception("Permission instagram_manage_comments manquante")
+
+    # Vérifie qu’on a les accès aux pages
     graph_get("me/accounts", {"access_token": token})
 
 
@@ -42,11 +87,12 @@ def fetch_instagram_data(token: str):
 
 def send_email(to: str, subject: str, body: str):
     key = os.getenv("MAILGUN_API_KEY")
+    domain = os.getenv("MAILGUN_DOMAIN")
     return requests.post(
-        "https://api.mailgun.net/v3/sandbox.mailgun.org/messages",
+        f"https://api.mailgun.net/v3/{domain}/messages",
         auth=("api", key),
         data={
-            "from": "Commanda <mailgun@sandbox.mailgun.org>",
+            "from": f"Commanda <bot@{domain}>",
             "to": to,
             "subject": subject,
             "text": body,
