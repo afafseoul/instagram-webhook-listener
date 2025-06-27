@@ -99,12 +99,13 @@ def oauth_callback():
         📸 <b>Instagram</b> : {username}<br><br>
         🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
         <br>
-        <a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>
+        <a href="https://instagram-webhook-listener.onrender.com/oauth">Retour</a>
         """
 
     except Exception as e:
         error_text = str(e)
 
+        # ❌ Cas : non-admin de la page
         if "OAuthException" in error_text and ("does not have access" in error_text or "not authorized" in error_text):
             try:
                 page_resp = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={"access_token": token}).json()
@@ -124,7 +125,8 @@ def oauth_callback():
             send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        if "connected_instagram_account" in error_text:
+        # ❌ Cas : page non liée à un compte Instagram
+        if "connected_instagram_account" in error_text or "Page non liée" in error_text:
             try:
                 page_name = page_data.get("name", "inconnue")
             except:
@@ -134,6 +136,7 @@ def oauth_callback():
             send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
+        # Autre erreur
         msg = f"❌ Erreur post-OAuth : {error_text}"
         print(msg)
         send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
