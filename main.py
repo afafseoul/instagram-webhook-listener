@@ -86,6 +86,9 @@ def oauth_callback():
         connected_insta_id = page_data.get("connected_instagram_account", {}).get("id")
         selected_insta_id = insta_data.get("id")
 
+        print(f"🔍 IG connecté à la page : {connected_insta_id}")
+        print(f"🔍 IG sélectionné dans OAuth : {selected_insta_id}")
+
         page_id = page_data.get("id", "")
         page_name = page_data.get("name", "")
         insta_id = insta_data.get("id", "")
@@ -101,7 +104,7 @@ def oauth_callback():
         if not insta_id or not username:
             print("⚠️ insta_id ou username manquant")
             raise ValueError("Missing insta_id")
-        if not connected_insta_id or not selected_insta_id or connected_insta_id != selected_insta_id:
+        if not connected_insta_id or not selected_insta_id or str(connected_insta_id) != str(selected_insta_id):
             print("⚠️ Les IDs Instagram ne correspondent pas")
             raise ValueError("Instagram IDs do not match")
 
