@@ -86,21 +86,15 @@ def oauth_callback():
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
+        success_msg = f"✅ <b>Connexion réussie !</b><br><br>\n🔑 <b>Token reçu</b> : {token[:50]}...<br>\n📄 <b>Page</b> : {page_name}<br>\n📸 <b>Instagram</b> : {username}<br><br>\n🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br><br>\n<a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>"
+
         send_email(
             ADMIN_EMAIL,
-            "✅ Nouveau token client",
-            f"📄 Token long terme : {token[:50]}...\n\nExpire le : {expires_at}\nPage : {page_name}\nIG : {username}"
+            f"✅ Nouveau token client - {page_name}",
+            success_msg
         )
 
-        return f"""
-        ✅ <b>Connexion réussie !</b><br><br>
-        🔑 <b>Token reçu</b> : {token[:50]}...<br>
-        📄 <b>Page</b> : {page_name}<br>
-        📸 <b>Instagram</b> : {username}<br><br>
-        🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br>
-        <br>
-        <a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>
-        """
+        return success_msg
 
     except Exception as e:
         error_text = str(e)
@@ -145,21 +139,21 @@ def oauth_callback():
                  - Connectez-vous avec votre compte Instagram professionnel
             """
             print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth - Aucune page", msg)
             return f"<h2 style='color:red; white-space:pre-wrap'>{msg}</h2>"
 
+        page_name = pages[0].get("name", "inconnue")
+
         if "OAuthException" in error_text and ("does not have access" in error_text or "not authorized" in error_text):
-            page_name = pages[0].get("name", "inconnue")
             msg = f"❌ Erreur : Le compte Facebook <b>{user_name}</b> n'est pas administrateur de la page <b>{page_name}</b>."
             print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - {page_name}", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
         if "connected_instagram_account" in error_text:
-            page_name = pages[0].get("name", "inconnue")
             msg = f"❌ Erreur : La page <b>{page_name}</b> n'est pas liée à un compte Instagram professionnel."
             print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - {page_name}", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
         if "Missing permissions" in error_text or "permissions error" in error_text:
@@ -181,12 +175,12 @@ def oauth_callback():
             3. Terminez le processus
             """
             print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - {page_name}", msg)
             return f"<h2 style='color:red; white-space:pre-wrap'>{msg}</h2>"
 
         msg = "❌ Erreur post-OAuth inconnue : " + error_text
         print(msg)
-        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - {page_name}", msg)
         return f"<h2 style='color:red'>{msg}</h2>"
 
 if __name__ == "__main__":
