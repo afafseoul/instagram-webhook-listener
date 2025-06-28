@@ -31,20 +31,6 @@ def send_email(to, subject, message):
     except Exception as e:
         print("❌ Erreur envoi Make.com :", str(e))
 
-def get_default_error_message():
-    return (
-        "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
-        "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
-        "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-        "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
-        "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
-        "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
-        "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience')</span><br>"
-        "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b></span><br><br>"
-        "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
-        "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
-    )
-
 @app.route("/oauth")
 def oauth_start():
     client_id = os.getenv("META_CLIENT_ID")
@@ -76,10 +62,6 @@ def oauth_callback():
         send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
         return f"❌ Erreur récupération token : {error}"
 
-    # Initialisation évitant crash si exception prématurée
-    page_name = ""
-    username = ""
-
     try:
         verify_token_permissions(token)
         page_data, insta_data = fetch_instagram_data(token)
@@ -87,24 +69,28 @@ def oauth_callback():
         connected_insta_id = page_data.get("connected_instagram_account", {}).get("id")
         selected_insta_id = insta_data.get("id")
 
-        page_id = page_data.get("id", "")
+        if connected_insta_id and selected_insta_id and connected_insta_id != selected_insta_id:
+            msg = (
+                f"❌ Erreur : Le compte Instagram sélectionné via OAuth ne correspond pas à celui lié à la page Facebook.<br><br>"
+                f"➡️ Page Facebook : <b>{page_data.get('name', 'inconnue')}</b><br>"
+                f"📎 Compte Instagram lié à la page : <b>{connected_insta_id}</b><br>"
+                f"🔗 Compte Instagram sélectionné : <b>{selected_insta_id}</b><br><br>"
+                "Merci de sélectionner dans la fenêtre d’autorisation le compte Instagram qui est bien relié à la page choisie.<br>"
+                "Vérifiez dans votre page Facebook > Paramètres > Instagram que c’est bien le bon compte lié."
+            )
+            print(msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            return f"<h2 style='color:red'>{msg}</h2>"
+
+        page_id = page_data["id"]
         page_name = page_data.get("name", "")
-        insta_id = insta_data.get("id", "")
+        insta_id = insta_data["id"]
         username = insta_data.get("username", "")
 
         print("✅ Code reçu :", code)
         print("📄 Page :", page_name)
         print("📸 IG :", username)
 
-        # Vérifications indépendantes
-        if not page_id or not page_name:
-            raise ValueError("Missing page_id")
-        if not insta_id or not username:
-            raise ValueError("Missing insta_id")
-        if not connected_insta_id or not selected_insta_id or connected_insta_id != selected_insta_id:
-            raise ValueError("Instagram IDs do not match")
-
-        # ✅ Succès seulement si tout est bon
         supabase.table("instagram_tokens").insert({
             "access_token": token,
             "token_expires_at": expires_at.isoformat() if expires_at else None,
@@ -118,11 +104,8 @@ def oauth_callback():
 
         send_email(
             ADMIN_EMAIL,
-            f"✅ Nouveau token client - {username or page_name or 'inconnu'}",
-            f"📄 <b>Token long terme</b> : {token[:50]}...<br><br>"
-            f"⏳ <b>Expiration</b> : {expires_at}<br>"
-            f"📄 <b>Page</b> : {page_name}<br>"
-            f"📸 <b>Instagram</b> : {username}"
+            "✅ Nouveau token client",
+            f"📄 Token long terme : {token[:50]}...\n\nExpire le : {expires_at}\nPage : {page_name}\nIG : {username}"
         )
 
         return f"""
@@ -136,9 +119,54 @@ def oauth_callback():
         """
 
     except Exception as e:
-        msg = get_default_error_message()
-        send_email(ADMIN_EMAIL, f"❌ OAuth échoué - {page_name or username or 'inconnu'}", msg)
-        return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
+        error_text = str(e)
+
+        try:
+            user_resp = requests.get("https://graph.facebook.com/v19.0/me?fields=name", params={"access_token": token}).json()
+            user_name = user_resp.get("name", "utilisateur inconnu")
+        except:
+            user_name = "utilisateur inconnu"
+
+        try:
+            page_resp = requests.get("https://graph.facebook.com/v19.0/me/accounts", params={"access_token": token}).json()
+            pages = page_resp.get("data", [])
+        except:
+            pages = []
+
+        full_admin_msg = (
+            "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
+            "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
+            "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
+            "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
+            "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
+            "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
+            "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience' dans certaines versions)</span><br>"
+            "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b> et non Éditeur / Gestionnaire</span><br><br>"
+            "<span style='font-size: 16px;'>5️⃣ Rendez-vous ensuite dans <b>Paramètres > Instagram</b> et vérifiez que la page est bien liée au compte Instagram professionnel</span><br><br>"
+            "<span style='font-size: 16px;'>6️⃣ Enfin, dans la fenêtre d’autorisation (OAuth), sélectionnez uniquement cette page Facebook et le compte Instagram correspondant</span><br>"
+        )
+
+        if not pages:
+            print(full_admin_msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", full_admin_msg)
+            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{full_admin_msg}</h2>"
+
+        if "OAuthException" in error_text and ("does not have access" in error_text or "not authorized" in error_text):
+            print(full_admin_msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", full_admin_msg)
+            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{full_admin_msg}</h2>"
+
+        if "connected_instagram_account" in error_text:
+            page_name = pages[0].get("name", "inconnue")
+            msg = f"❌ Erreur : La page <b>{page_name}</b> n'est pas liée à un compte Instagram professionnel."
+            print(msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
+            return f"<h2 style='color:red'>{msg}</h2>"
+
+        fallback_msg = f"❌ Erreur post-OAuth inconnue : {error_text}"
+        print(fallback_msg)
+        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", fallback_msg)
+        return f"<h2 style='color:red'>{fallback_msg}</h2>"
 
 if __name__ == "__main__":
     app.run()
