@@ -1,148 +1,101 @@
-from flask import Flask, request, redirect
 import os
-from supabase import create_client
+from datetime import datetime, timedelta
 import requests
-from utils import (
-    verify_token_permissions,
-    fetch_instagram_data,
-    get_long_token,
-)
-from datetime import datetime
 
-app = Flask(__name__)
+GRAPH_BASE = "https://graph.facebook.com/v19.0"
+APP_ID = os.getenv("META_CLIENT_ID")
+APP_SECRET = os.getenv("META_CLIENT_SECRET")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
-BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
-MAKE_WEBHOOK_EMAIL = os.getenv("MAKE_WEBHOOK_EMAIL")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+def graph_get(endpoint: str, params: dict) -> dict:
+    url = f"{GRAPH_BASE}/{endpoint}"
+    res = requests.get(url, params=params, timeout=10)
+    data = res.json()
+    if res.status_code != 200:
+        msg = data.get("error", {}).get("message", "Unknown error")
+        raise Exception(msg)
+    return data
 
-def send_email(to, subject, message):
-    payload = {
-        "to": to,
-        "subject": subject,
-        "message": message
-    }
-    print("\U0001f4ec ENVOI À MAKE :", payload)
+
+def get_long_token(code: str, redirect_uri: str):
+    """Exchange OAuth code for a long lived token."""
     try:
-        requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
-    except Exception as e:
-        print("❌ Erreur envoi Make.com :", str(e))
-
-def get_default_error_message():
-    return (
-        "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
-        "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
-        "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-        "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
-        "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
-        "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
-        "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience')</span><br>"
-        "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b></span><br><br>"
-        "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
-        "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
-    )
-
-@app.route("/oauth")
-def oauth_start():
-    client_id = os.getenv("META_CLIENT_ID")
-    redirect_uri = BASE_REDIRECT_URL
-    scope = ",".join([
-        "pages_show_list",
-        "instagram_basic",
-        "instagram_manage_comments",
-        "pages_manage_metadata",
-        "pages_read_engagement"
-    ])
-    return redirect(
-        f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=123"
-    )
-
-@app.route("/callback")
-def oauth_callback():
-    code = request.args.get("code")
-    if not code:
-        return "❌ <b>Erreur :</b> Code OAuth manquant"
-
-    print("🔁 URL reçue :", request.url)
-    print("📦 Params GET:", dict(request.args))
-
-    redirect_uri = BASE_REDIRECT_URL
-    token, expires_at, error = get_long_token(code, redirect_uri)
-
-    if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
-        return f"❌ Erreur récupération token : {error}"
-
-    page_name = ""
-    username = ""
-
-    try:
-        verify_token_permissions(token)
-        page_data, insta_data = fetch_instagram_data(token)
-
-        connected_insta_id = page_data.get("connected_instagram_account", {}).get("id")
-        selected_insta_id = insta_data.get("id")
-
-        print(f"🔍 IG connecté à la page : {connected_insta_id}")
-        print(f"🔍 IG sélectionné dans OAuth : {selected_insta_id}")
-
-        page_id = page_data.get("id", "")
-        page_name = page_data.get("name", "")
-        insta_id = insta_data.get("id", "")
-        username = insta_data.get("username", "")
-
-        print("✅ Code reçu :", code)
-        print("📄 Page :", page_name)
-        print("📸 IG :", username)
-
-        if not page_id or not page_name:
-            print("⚠️ page_id ou page_name manquant")
-            raise ValueError("Missing page_id")
-        if not insta_id or not username:
-            print("⚠️ insta_id ou username manquant")
-            raise ValueError("Missing insta_id")
-        if not connected_insta_id or not selected_insta_id or str(connected_insta_id) != str(selected_insta_id):
-            print("⚠️ Les IDs Instagram ne correspondent pas")
-            raise ValueError("Instagram IDs do not match")
-
-        supabase.table("instagram_tokens").insert({
-            "access_token": token,
-            "token_expires_at": expires_at.isoformat() if expires_at else None,
-            "page_id": page_id,
-            "page_name": page_name,
-            "instagram_id": insta_id,
-            "instagram_username": username,
-            "status_verified": True,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
-
-        send_email(
-            ADMIN_EMAIL,
-            f"✅ Nouveau token client - {username or page_name or 'inconnu'}",
-            f"📄 <b>Token long terme</b> : {token[:50]}...<br><br>"
-            f"⏳ <b>Expiration</b> : {expires_at}<br>"
-            f"📄 <b>Page</b> : {page_name}<br>"
-            f"📸 <b>Instagram</b> : {username}"
+        # Step 1: short lived token
+        data = graph_get(
+            "oauth/access_token",
+            {
+                "client_id": APP_ID,
+                "client_secret": APP_SECRET,
+                "redirect_uri": redirect_uri,
+                "code": code,
+            },
         )
-
-        return f"""
-        ✅ <b>Connexion réussie !</b><br><br>
-        🔑 <b>Token reçu</b> : {token[:50]}...<br>
-        📄 <b>Page</b> : {page_name}<br>
-        📸 <b>Instagram</b> : {username}<br><br>
-        🟢 Le token a été stocké <br>
-        <br>
-        <a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>
-        """
-
+        short_token = data.get("access_token")
+        # Step 2: long lived token
+        long_data = graph_get(
+            "oauth/access_token",
+            {
+                "grant_type": "fb_exchange_token",
+                "client_id": APP_ID,
+                "client_secret": APP_SECRET,
+                "fb_exchange_token": short_token,
+            },
+        )
+        token = long_data.get("access_token")
+        exp = long_data.get("expires_in")
+        expires_at = datetime.utcnow() + timedelta(seconds=exp) if exp else None
+        return token, expires_at, None
     except Exception as e:
-        print("❌ Exception dans oauth_callback:", str(e))
-        msg = get_default_error_message()
-        send_email(ADMIN_EMAIL, f"❌ OAuth échoué - {page_name or username or 'inconnu'}", msg)
-        return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
+        return None, None, str(e)
 
-if __name__ == "__main__":
-    app.run()
+
+def verify_token_permissions(token: str) -> None:
+    """Ensure token has needed permissions."""
+    system_token = os.getenv("META_SYSTEM_TOKEN") or f"{APP_ID}|{APP_SECRET}"
+    debug = graph_get(
+        "debug_token",
+        {"input_token": token, "access_token": system_token},
+    ).get("data", {})
+    if not debug.get("is_valid"):
+        raise Exception("Token invalide")
+
+    scopes = debug.get("scopes", [])
+    if "instagram_manage_comments" not in scopes:
+        raise Exception("Permission instagram_manage_comments manquante")
+
+    # Vérifie qu’on a les accès aux pages
+    graph_get("me/accounts", {"access_token": token})
+
+
+def fetch_instagram_data(token: str):
+    pages = graph_get(
+        "me/accounts",
+        {"fields": "id,name,instagram_business_account", "access_token": token},
+    ).get("data", [])
+    if not pages:
+        raise Exception("Aucune page accessible")
+
+    page = pages[0]
+    ig_acc = page.get("instagram_business_account")
+    if not ig_acc:
+        raise Exception("Page non liée à Instagram")
+
+    ig_id = ig_acc["id"]
+    ig_info = graph_get(ig_id, {"fields": "username", "access_token": token})
+    return page, {"id": ig_id, "username": ig_info.get("username", "")}
+
+
+def send_email(to: str, subject: str, body: str):
+    key = os.getenv("MAILGUN_API_KEY")
+    domain = os.getenv("MAILGUN_DOMAIN")
+    return requests.post(
+        f"https://api.mailgun.net/v3/{domain}/messages",
+        auth=("api", key),
+        data={
+            "from": f"Commanda <bot@{domain}>",
+            "to": to,
+            "subject": subject,
+            "text": body,
+        },
+        timeout=10,
+    )
