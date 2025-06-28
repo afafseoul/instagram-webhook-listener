@@ -133,34 +133,28 @@ def oauth_callback():
         except:
             pages = []
 
+        full_admin_msg = (
+            "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
+            "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
+            "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
+            "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
+            "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
+            "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
+            "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience' dans certaines versions)</span><br>"
+            "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b> et non Éditeur / Gestionnaire</span><br><br>"
+            "<span style='font-size: 16px;'>5️⃣ Rendez-vous ensuite dans <b>Paramètres > Instagram</b> et vérifiez que la page est bien liée au compte Instagram professionnel</span><br><br>"
+            "<span style='font-size: 16px;'>6️⃣ Enfin, dans la fenêtre d’autorisation (OAuth), sélectionnez uniquement cette page Facebook et le compte Instagram correspondant</span><br>"
+        )
+
         if not pages:
-            msg = (
-                "❌ <span style='font-size: 20px; font-weight: bold;'>Erreur post-OAuth :</span> "
-                "<span style='font-size: 18px;'>soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram, "
-                "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-                "<span style='font-size: 16px;'>Merci de vérifier :</span><br>"
-                "<span style='font-size: 16px;'>1. Que votre compte Facebook est bien administrateur de la page (<b>Page > Paramètres > Accès à la Page</b>)</span><br>"
-                "<span style='font-size: 16px;'>2. Que la page est bien liée à un compte Instagram professionnel via <b>Paramètres > Instagram</b>.</span><br>"
-                "<span style='font-size: 16px;'>3. Que vous avez bien sélectionné la bonne combinaison dans la fenêtre d’autorisation.</span>"
-            )
-            print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
-            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
+            print(full_admin_msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", full_admin_msg)
+            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{full_admin_msg}</h2>"
 
         if "OAuthException" in error_text and ("does not have access" in error_text or "not authorized" in error_text):
-            page_name = pages[0].get("name", "inconnue")
-            msg = (
-                "❌ <span style='font-size: 20px; font-weight: bold;'>Erreur post-OAuth :</span> "
-                "<span style='font-size: 18px;'>soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram, "
-                "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-                "<span style='font-size: 16px;'>Merci de vérifier :</span><br>"
-                "<span style='font-size: 16px;'>1. Que votre compte Facebook est bien administrateur de la page (<b>Page > Paramètres > Accès à la Page</b>)</span><br>"
-                "<span style='font-size: 16px;'>2. Que la page est bien liée à un compte Instagram professionnel via <b>Paramètres > Instagram</b>.</span><br>"
-                "<span style='font-size: 16px;'>3. Que vous avez bien sélectionné la bonne combinaison dans la fenêtre d’autorisation.</span>"
-            )
-            print(msg)
-            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
-            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
+            print(full_admin_msg)
+            send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", full_admin_msg)
+            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{full_admin_msg}</h2>"
 
         if "connected_instagram_account" in error_text:
             page_name = pages[0].get("name", "inconnue")
