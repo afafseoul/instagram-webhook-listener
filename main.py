@@ -25,7 +25,7 @@ def send_email(to, subject, message):
         "subject": subject,
         "message": message
     }
-    print("📬 ENVOI À MAKE :", payload)
+    print("\U0001f4ec ENVOI À MAKE :", payload)
     try:
         requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
     except Exception as e:
@@ -59,7 +59,7 @@ def oauth_callback():
     token, expires_at, error = get_long_token(code, redirect_uri)
 
     if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
+        send_email(ADMIN_EMAIL, "❌ Échec OAuth - Erreur récupération token", error)
         return f"❌ Erreur récupération token : {error}"
 
     try:
@@ -74,6 +74,13 @@ def oauth_callback():
         print("✅ Code reçu :", code)
         print("📄 Page :", page_name)
         print("📸 IG :", username)
+
+        existing = supabase.table("instagram_tokens").select("id").eq("page_id", page_id).execute()
+        if existing.data:
+            msg = f"❌ Erreur : la page <b>{page_name}</b> est déjà connectée. Vous ne pouvez pas la réassocier."
+            print(msg)
+            send_email(ADMIN_EMAIL, f"❌ Page déjà connectée - {page_name}", msg)
+            return f"<h2 style='color:red'>{msg}</h2>"
 
         supabase.table("instagram_tokens").insert({
             "access_token": token,
