@@ -18,10 +18,8 @@ def graph_get(endpoint: str, params: dict) -> dict:
 
 
 def get_long_token(code: str, redirect_uri: str):
-    """Exchange OAuth code for a long lived token."""
     try:
-        # Step 1: short lived token
-        data = graph_get(
+        short_token = graph_get(
             "oauth/access_token",
             {
                 "client_id": APP_ID,
@@ -29,9 +27,8 @@ def get_long_token(code: str, redirect_uri: str):
                 "redirect_uri": redirect_uri,
                 "code": code,
             },
-        )
-        short_token = data.get("access_token")
-        # Step 2: long lived token
+        ).get("access_token")
+
         long_data = graph_get(
             "oauth/access_token",
             {
@@ -50,12 +47,12 @@ def get_long_token(code: str, redirect_uri: str):
 
 
 def verify_token_permissions(token: str) -> None:
-    """Ensure token has needed permissions."""
     system_token = os.getenv("META_SYSTEM_TOKEN") or f"{APP_ID}|{APP_SECRET}"
     debug = graph_get(
         "debug_token",
         {"input_token": token, "access_token": system_token},
     ).get("data", {})
+
     if not debug.get("is_valid"):
         raise Exception("Token invalide")
 
@@ -63,26 +60,36 @@ def verify_token_permissions(token: str) -> None:
     if "instagram_manage_comments" not in scopes:
         raise Exception("Permission instagram_manage_comments manquante")
 
-    # Vérifie qu’on a les accès aux pages
     graph_get("me/accounts", {"access_token": token})
 
 
 def fetch_instagram_data(token: str):
-    pages = graph_get(
+    accounts = graph_get(
         "me/accounts",
-        {"fields": "id,name,instagram_business_account", "access_token": token},
+        {"access_token": token}
     ).get("data", [])
-    if not pages:
+
+    if not accounts:
         raise Exception("Aucune page accessible")
 
-    page = pages[0]
-    ig_acc = page.get("instagram_business_account")
-    if not ig_acc:
-        raise Exception("Page non liée à Instagram")
+    page = accounts[0]
+    page_id = page.get("id")
 
-    ig_id = ig_acc["id"]
-    ig_info = graph_get(ig_id, {"fields": "username", "access_token": token})
-    return page, {"id": ig_id, "username": ig_info.get("username", "")}
+    connected = graph_get(
+        f"{page_id}",
+        {"fields": "connected_instagram_account", "access_token": token}
+    ).get("connected_instagram_account", {})
+
+    insta_id = connected.get("id")
+    insta_data = {}
+
+    if insta_id:
+        insta_data = graph_get(
+            f"{insta_id}",
+            {"fields": "id,username", "access_token": token}
+        )
+
+    return page, insta_data
 
 
 def send_email(to: str, subject: str, body: str):
