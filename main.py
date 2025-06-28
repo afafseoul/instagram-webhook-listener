@@ -76,6 +76,10 @@ def oauth_callback():
         send_email(ADMIN_EMAIL, "❌ Échec OAuth", error)
         return f"❌ Erreur récupération token : {error}"
 
+    # Initialisation évitant crash si exception prématurée
+    page_name = ""
+    username = ""
+
     try:
         verify_token_permissions(token)
         page_data, insta_data = fetch_instagram_data(token)
