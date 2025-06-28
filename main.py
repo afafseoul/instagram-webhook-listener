@@ -163,9 +163,8 @@ def oauth_callback():
             send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        fallback_msg = f"❌ Erreur post-OAuth inconnue : {error_text}"
-        print(fallback_msg)
-        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", fallback_msg)
+        print(full_admin_msg)
+        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth", full_admin_msg)
         return f"<h2 style='color:red'>{fallback_msg}</h2>"
 
 if __name__ == "__main__":
