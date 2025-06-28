@@ -137,7 +137,7 @@ def oauth_callback():
             "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
             "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
         )
-        send_email(ADMIN_EMAIL, "❌ Échec post-OAuth - fallback", fallback_msg)
+        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - fallback", fallback_msg)
         return f"<h2 style='color:red; font-family:Arial, sans-serif'>{fallback_msg}</h2>"
 
 if __name__ == "__main__":
