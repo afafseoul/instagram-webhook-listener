@@ -25,11 +25,25 @@ def send_email(to, subject, message):
         "subject": subject,
         "message": message
     }
-    print("\U0001f4ec ENVOI À MAKE :", payload)
+    print("📬 ENVOI À MAKE :", payload)
     try:
         requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
     except Exception as e:
         print("❌ Erreur envoi Make.com :", str(e))
+
+def get_default_error_message():
+    return (
+        "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
+        "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
+        "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
+        "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
+        "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
+        "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
+        "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience')</span><br>"
+        "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b></span><br><br>"
+        "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
+        "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
+    )
 
 @app.route("/oauth")
 def oauth_start():
@@ -78,22 +92,15 @@ def oauth_callback():
         print("📄 Page :", page_name)
         print("📸 IG :", username)
 
-        if not page_id or not insta_id or not connected_insta_id or not selected_insta_id or connected_insta_id != selected_insta_id:
-            msg = (
-                "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
-                "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
-                "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-                "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
-                "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
-                "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
-                "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience')</span><br>"
-                "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b></span><br><br>"
-                "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
-                "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
-            )
-            send_email(ADMIN_EMAIL, f"❌ OAuth échoué - {page_name or username or 'inconnu'}", msg)
-            return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
+        # Vérifications indépendantes
+        if not page_id or not page_name:
+            raise ValueError("Missing page_id")
+        if not insta_id or not username:
+            raise ValueError("Missing insta_id")
+        if not connected_insta_id or not selected_insta_id or connected_insta_id != selected_insta_id:
+            raise ValueError("Instagram IDs do not match")
 
+        # ✅ Succès seulement si tout est bon
         supabase.table("instagram_tokens").insert({
             "access_token": token,
             "token_expires_at": expires_at.isoformat() if expires_at else None,
@@ -125,20 +132,9 @@ def oauth_callback():
         """
 
     except Exception as e:
-        fallback_msg = (
-            "❌ <span style='font-size: 22px; font-weight: bold;'>Erreur post-OAuth :</span><br>"
-            "<span style='font-size: 18px;'>Soit vous n’avez pas associé la bonne page Facebook au bon compte Instagram,<br>"
-            "soit vous n’êtes pas administrateur de la page Facebook sélectionnée.</span><br><br>"
-            "<span style='font-size: 17px; font-weight: bold;'>Merci de vérifier point par point :</span><br><br>"
-            "<span style='font-size: 16px;'>1️⃣ Connectez-vous à votre compte Facebook personnel (celui qui a accès à la page)</span><br>"
-            "<span style='font-size: 16px;'>2️⃣ Rendez-vous sur <b>Facebook > Page concernée > Paramètres</b></span><br>"
-            "<span style='font-size: 16px;'>3️⃣ Cliquez sur <b>Accès à la Page</b> (ou 'New Pages Experience')</span><br>"
-            "<span style='font-size: 16px;'>4️⃣ Vérifiez que votre profil Facebook est bien <b>Administrateur</b></span><br><br>"
-            "<span style='font-size: 16px;'>5️⃣ Allez dans <b>Paramètres > Instagram</b> pour vérifier que la page est bien liée à un compte Instagram professionnel</span><br><br>"
-            "<span style='font-size: 16px;'>6️⃣ Dans la fenêtre d’autorisation, sélectionnez uniquement cette page Facebook et le bon compte Instagram</span><br>"
-        )
-        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - fallback", fallback_msg)
-        return f"<h2 style='color:red; font-family:Arial, sans-serif'>{fallback_msg}</h2>"
+        msg = get_default_error_message()
+        send_email(ADMIN_EMAIL, f"❌ OAuth échoué - {page_name or username or 'inconnu'}", msg)
+        return f"<h2 style='color:red; font-family:Arial, sans-serif'>{msg}</h2>"
 
 if __name__ == "__main__":
     app.run()
