@@ -4,59 +4,71 @@ from supabase import create_client
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-MAKE_NEW_POST_WEBHOOK = os.getenv("MAKE_NEW_POST_WEBHOOK")  # ton lien Make
+MAKE_NEW_POST_WEBHOOK = os.getenv("MAKE_NEW_POST_WEBHOOK")  # lien Make
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_existing_media_ids(instagram_id, token):
-    """Récupère les media_ids actuels du compte IG"""
-    url = f"https://graph.facebook.com/v19.0/{instagram_id}/media"
-    params = {"access_token": token, "limit": 100}
+def get_media_timestamp(media_id, token):
+    """Récupère le timestamp d’un media"""
+    url = f"https://graph.facebook.com/v19.0/{media_id}"
+    params = {"fields": "timestamp", "access_token": token}
     try:
         res = requests.get(url, params=params, timeout=10)
-        items = res.json().get("data", [])
-        return [item["id"] for item in items if "id" in item]
+        return res.json().get("timestamp")
     except Exception as e:
-        print("❌ Erreur récupération médias :", e)
-        return []
+        print("❌ Erreur récupération timestamp media :", e)
+        return None
 
-def store_initial_media_list(instagram_id, media_ids):
-    """Stocke les media_ids dans Supabase (1 ligne par media)"""
-    for media_id in media_ids:
-        supabase.table("media_known").insert({
-            "instagram_id": instagram_id,
-            "media_id": media_id
-        }).execute()
-
-def media_id_already_known(instagram_id, media_id):
-    """Vérifie si le media_id est déjà connu"""
-    result = supabase.table("media_known").select("id").eq("instagram_id", instagram_id).eq("media_id", media_id).execute()
-    return bool(result.data)
-
-def save_new_media_id(instagram_id, media_id):
-    """Ajoute le media_id à la base Supabase"""
-    supabase.table("media_known").insert({
-        "instagram_id": instagram_id,
-        "media_id": media_id
-    }).execute()
+def get_user_info(instagram_id):
+    """Récupère les infos Supabase du client (abonnement, timestamp, etc.)"""
+    result = supabase.table("instagram_tokens").select("*").eq("instagram_id", instagram_id).execute()
+    if not result.data:
+        return None
+    return result.data[0]
 
 def handle_comment_event(data):
-    """Analyse un événement webhook reçu, regarde si le commentaire est sur un nouveau post"""
+    """Analyse un événement webhook reçu, regarde si le commentaire est sur un post valide"""
     try:
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 if value.get("item") == "comment":
-                    media_id = value.get("parent_id")  # ou 'post_id' selon la structure exacte
+                    media_id = value.get("parent_id")
                     instagram_id = entry.get("id")
 
                     if not media_id or not instagram_id:
                         continue
 
-                    if not media_id_already_known(instagram_id, media_id):
-                        print(f"🆕 Nouveau post détecté avec media_id : {media_id}")
+                    # 🔍 Récupération données Supabase client
+                    user = get_user_info(instagram_id)
+                    if not user:
+                        print("❌ Utilisateur non trouvé dans Supabase")
+                        continue
+
+                    # 📛 Vérifie si abonnement actif
+                    if not (user.get("abonnement_1") or user.get("abonnement_2") or user.get("abonnement_3")):
+                        print("❌ Aucun abonnement actif, on ignore")
+                        continue
+
+                    # ⏱️ Vérifie le timestamp du post vs service_start_timestamp
+                    token = user.get("access_token") or os.getenv("META_SYSTEM_TOKEN")
+                    media_ts = get_media_timestamp(media_id, token)
+                    service_ts = user.get("service_start_timestamp")
+
+                    if not media_ts or not service_ts:
+                        print("⚠️ Timestamps manquants")
+                        continue
+
+                    if media_ts > service_ts:
+                        print(f"🆕 Nouveau post détecté (media_id={media_id}) après début service")
+                        supabase.table("new_posts").insert({
+                            "instagram_id": instagram_id,
+                            "media_id": media_id
+                        }).execute()
                         send_new_post_webhook(instagram_id, media_id, value)
-                        save_new_media_id(instagram_id, media_id)
+                    else:
+                        print("⏳ Ancien post, on ignore")
+
     except Exception as e:
         print("❌ Erreur traitement commentaire :", str(e))
 
