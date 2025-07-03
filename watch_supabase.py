@@ -25,28 +25,27 @@ def process_pending_clients():
     """Détecte les clients avec un abonnement activé mais sans timestamp"""
     result = supabase.table("instagram_tokens") \
         .select("*") \
-        .is_("service_start_timestamp", "null") \
         .eq("abonnement_1", True) \
         .execute()
 
     for user in result.data:
-        instagram_id = user["instagram_id"]
-        token = user.get("access_token") or os.getenv("META_SYSTEM_TOKEN")
+        timestamp = user.get("service_start_timestamp")
+        if not timestamp or str(timestamp).strip() == "":
+            instagram_id = user["instagram_id"]
+            token = user.get("access_token") or os.getenv("META_SYSTEM_TOKEN")
 
-        # 👉 Option 1 : timestamp du dernier post
-        latest_ts = get_instagram_latest_post_timestamp(instagram_id, token)
+            latest_ts = get_instagram_latest_post_timestamp(instagram_id, token)
 
-        # 👉 Option 2 : ou juste le timestamp actuel
-        # latest_ts = datetime.now(timezone.utc).isoformat()
-
-        if latest_ts:
-            supabase.table("instagram_tokens") \
-                .update({"service_start_timestamp": latest_ts}) \
-                .eq("instagram_id", instagram_id) \
-                .execute()
-            print(f"✅ Timestamp de démarrage défini pour {instagram_id} : {latest_ts}")
+            if latest_ts:
+                supabase.table("instagram_tokens") \
+                    .update({"service_start_timestamp": latest_ts}) \
+                    .eq("instagram_id", instagram_id) \
+                    .execute()
+                print(f"✅ Timestamp défini pour {instagram_id} : {latest_ts}")
+            else:
+                print(f"⚠️ Impossible de récupérer le timestamp pour {instagram_id}")
         else:
-            print(f"⚠️ Impossible de récupérer le timestamp pour {instagram_id}")
+            print(f"⏭️ Déjà traité : {user.get('instagram_username')}")
 
 if __name__ == "__main__":
     while True:
