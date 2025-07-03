@@ -1,7 +1,8 @@
 from flask import Flask, request, redirect
 import os
-from supabase import create_client
+import threading
 import requests
+from supabase import create_client
 from utils import (
     verify_token_permissions,
     fetch_instagram_data,
@@ -16,7 +17,7 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 MAKE_WEBHOOK_EMAIL = os.getenv("MAKE_WEBHOOK_EMAIL")
-MAKE_WEBHOOK_POSTS = os.getenv("MAKE_WEBHOOK_POSTS")  # Ajouté pour les nouveaux posts
+MAKE_WEBHOOK_POSTS = os.getenv("MAKE_WEBHOOK_POSTS")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -110,11 +111,9 @@ def oauth_callback():
 
     except Exception as e:
         error_text = str(e)
-        # même gestion d'erreurs qu'avant (inchangée)
-        # [...]
         msg = "❌ Erreur post-OAuth inconnue : " + error_text
         print(msg)
-        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth - {page_name}", msg)
+        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth", msg)
         return f"<h2 style='color:red'>{msg}</h2>"
 
 @app.route("/webhook", methods=["GET", "POST"])
@@ -136,5 +135,11 @@ def webhook():
             print("❌ Erreur envoi webhook à Make:", str(e))
     return "ok", 200
 
+# 🔥 Lance le watcher de table automatiquement en arrière-plan
+def start_supabase_watcher():
+    from watch_supabase import watch_updates
+    watch_updates()
+
 if __name__ == "__main__":
+    threading.Thread(target=start_supabase_watcher, daemon=True).start()
     app.run()
