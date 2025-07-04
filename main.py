@@ -1,37 +1,20 @@
 from flask import Flask, request, redirect
 import os
-import threading
 import requests
+from datetime import datetime
 from supabase import create_client
 from utils import (
     verify_token_permissions,
     fetch_instagram_data,
     get_long_token,
 )
-from datetime import datetime
 
 app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
-MAKE_WEBHOOK_EMAIL = os.getenv("MAKE_WEBHOOK_EMAIL")
-MAKE_WEBHOOK_POSTS = os.getenv("MAKE_WEBHOOK_POSTS")
-
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-def send_email(to, subject, message):
-    payload = {
-        "to": to,
-        "subject": subject,
-        "message": message
-    }
-    print("📬 ENVOI À MAKE :", payload)
-    try:
-        requests.post(MAKE_WEBHOOK_EMAIL, json=payload)
-    except Exception as e:
-        print("❌ Erreur envoi Make.com :", str(e))
 
 @app.route("/oauth")
 def oauth_start():
@@ -62,7 +45,6 @@ def oauth_callback():
     token, expires_at, error = get_long_token(code, redirect_uri)
 
     if error:
-        send_email(ADMIN_EMAIL, "❌ Échec OAuth - Erreur récupération token", error)
         return f"❌ Erreur récupération token : {error}"
 
     try:
@@ -80,13 +62,15 @@ def oauth_callback():
 
         existing = supabase.table("instagram_tokens").select("id").eq("page_id", page_id).execute()
         if existing.data:
-            msg = f"❌ Erreur : la page <b>{page_name}</b> est déjà connectée. Vous ne pouvez pas la réassocier."
+            msg = f"❌ Erreur : la page <b>{page_name}</b> est déjà connectée."
             print(msg)
-            send_email(ADMIN_EMAIL, f"❌ Page déjà connectée - {page_name}", msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        # Souscrire aux événements de la page
-        requests.post(f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps", params={"access_token": token})
+        # Souscription aux événements de la page (feed)
+        requests.post(
+            f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps",
+            params={"access_token": token, "subscribed_fields": "feed"}
+        )
 
         supabase.table("instagram_tokens").insert({
             "access_token": token,
@@ -99,22 +83,12 @@ def oauth_callback():
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        success_msg = f"✅ <b>Connexion réussie !</b><br><br>\n🔑 <b>Token reçu</b> : {token[:50]}...<br>\n📄 <b>Page</b> : {page_name}<br>\n📸 <b>Instagram</b> : {username}<br><br>\n🟢 Le token a été stocké dans Supabase et un email a été envoyé.<br><br>\n<a href=\"https://instagram-webhook-listener.onrender.com/oauth\">Retour</a>"
-
-        send_email(
-            ADMIN_EMAIL,
-            f"✅ Nouveau token client - {page_name}",
-            success_msg
-        )
-
-        return success_msg
+        return f"✅ Connexion réussie pour {username} ({page_name}) !"
 
     except Exception as e:
         error_text = str(e)
-        msg = "❌ Erreur post-OAuth inconnue : " + error_text
-        print(msg)
-        send_email(ADMIN_EMAIL, f"❌ Échec post-OAuth", msg)
-        return f"<h2 style='color:red'>{msg}</h2>"
+        print("❌ Erreur post-OAuth :", error_text)
+        return f"<h2 style='color:red'>❌ Erreur post-OAuth : {error_text}</h2>"
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
@@ -126,20 +100,22 @@ def webhook():
             return challenge, 200
         return "Unauthorized", 403
 
+    # 🎯 Traitement du webhook POST (nouveau commentaire)
     data = request.json
     print("📩 Webhook reçu :", data)
-    if MAKE_WEBHOOK_POSTS:
-        try:
-            requests.post(MAKE_WEBHOOK_POSTS, json=data)
-        except Exception as e:
-            print("❌ Erreur envoi webhook à Make:", str(e))
+
+    try:
+        for entry in data.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                if value.get("item") == "comment":
+                    instagram_id = entry.get("id")
+                    media_id = value.get("parent_id")
+                    print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
+    except Exception as e:
+        print("❌ Erreur dans le traitement du commentaire :", str(e))
+
     return "ok", 200
 
-# 🔥 Lance le watcher de table automatiquement en arrière-plan
-def start_supabase_watcher():
-    from watch_supabase import watch_updates
-    watch_updates()
-
 if __name__ == "__main__":
-    threading.Thread(target=start_supabase_watcher, daemon=True).start()
-    app.run()
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
