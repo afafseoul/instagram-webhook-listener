@@ -100,7 +100,7 @@ def webhook():
             return challenge, 200
         return "Unauthorized", 403
 
-    # 🎯 Traitement du webhook POST (nouveau commentaire)
+    # 🎯 Traitement du webhook POST
     data = request.json
     print("📩 Webhook reçu :", data)
 
@@ -108,12 +108,17 @@ def webhook():
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
-                if value.get("item") == "comment":
+                item = value.get("item")
+                if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
                     print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
+                elif item == "post" and value.get("verb") == "add":
+                    instagram_id = entry.get("id")
+                    media_id = value.get("post_id") or value.get("id")
+                    print(f"🆕 Nouveau post détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
     except Exception as e:
-        print("❌ Erreur dans le traitement du commentaire :", str(e))
+        print("❌ Erreur dans le traitement du webhook :", str(e))
 
     return "ok", 200
 
