@@ -14,7 +14,25 @@ app = Flask(__name__)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
 BASE_REDIRECT_URL = os.getenv("BASE_REDIRECT_URL")
+INSTAGRAM_DM_PAGE_TOKEN = os.getenv("INSTAGRAM_DM_PAGE_TOKEN")
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+def send_instagram_dm(recipient_id, message_text):
+    """Envoie un message DM Instagram via l'API Graph"""
+    url = "https://graph.facebook.com/v19.0/me/messages"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "recipient": {"id": recipient_id},
+        "message": {"text": message_text},
+        "messaging_type": "RESPONSE"
+    }
+    params = {"access_token": INSTAGRAM_DM_PAGE_TOKEN}
+
+    try:
+        response = requests.post(url, params=params, json=payload, headers=headers)
+        print("✅ DM envoyé :", response.status_code, response.text)
+    except Exception as e:
+        print("❌ Erreur envoi DM :", e)
 
 @app.route("/oauth")
 def oauth_start():
@@ -108,15 +126,29 @@ def webhook():
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
+                field = change.get("field")
                 item = value.get("item")
+
+                # Commentaire
                 if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
                     print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
+
+                # Nouveau post
                 elif item == "post" and value.get("verb") == "add":
                     instagram_id = entry.get("id")
                     media_id = value.get("post_id") or value.get("id")
                     print(f"🆕 Nouveau post détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
+
+                # DM Instagram (messages)
+                elif field == "messages":
+                    sender_id = value.get("sender", {}).get("id")
+                    message_text = value.get("message", {}).get("text")
+                    print(f"📥 Nouveau DM Instagram de {sender_id} : {message_text}")
+
+                    if sender_id and message_text:
+                        send_instagram_dm(sender_id, "Merci pour votre message !")
     except Exception as e:
         print("❌ Erreur dans le traitement du webhook :", str(e))
 
