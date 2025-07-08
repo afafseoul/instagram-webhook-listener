@@ -111,6 +111,19 @@ def oauth_callback():
         return f"<h2 style='color:red'>❌ Erreur post-OAuth : {error_text}</h2>"
 
 @app.route("/webhook", methods=["POST"])
+
+@app.before_request
+def log_every_request():
+    if request.method == "POST":
+        print("🚨 Requête POST détectée")
+        print("➡️  Chemin :", request.path)
+        try:
+            data = request.get_json(force=True)
+            print("📩 Payload brut reçu :")
+            print(data)
+        except Exception as e:
+            print("⚠️ Aucune payload JSON ou erreur :", e)
+
 def webhook():
     # ✅ Affiche la route exacte reçue par Flask
     print("Requête reçue sur :", request.path)
