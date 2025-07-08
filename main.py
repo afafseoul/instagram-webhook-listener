@@ -115,6 +115,7 @@ def root_fallback():
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
+                print(data)
                 sender = msg.get("sender", {})
                 recipient = msg.get("recipient", {})
                 message = msg.get("message", {})
@@ -171,7 +172,6 @@ def webhook():
                 value = change.get("value", {})
                 field = change.get("field")
                 if field == "comments":
-                    print("💬 [Commentaire détecté] ", data) 
                     instagram_id = entry.get("id")
                     media_id = value.get("media", {}).get("id")
                     user_id = value.get("from", {}).get("id")
