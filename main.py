@@ -34,10 +34,6 @@ def send_instagram_dm(recipient_id, message_text):
     except Exception as e:
         print("❌ Erreur envoi DM :", e)
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    return "Webhook Listener OK", 200
-
 @app.route("/oauth")
 def oauth_start():
     client_id = os.getenv("META_CLIENT_ID")
@@ -49,7 +45,8 @@ def oauth_start():
         "pages_manage_metadata",
         "pages_read_engagement",
         "pages_read_user_content",
-        "pages_messaging"
+        "pages_messaging",
+        "instagram_manage_messages"
     ])
     return redirect(
         f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=123"
@@ -89,7 +86,7 @@ def oauth_callback():
             print(msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        # Souscription aux événements de la page (feed et messages d'un coup)
+        # Souscription aux événements de la page (feed et messages)
         requests.post(
             f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps",
             params={"access_token": token, "subscribed_fields": "feed,messages"}
@@ -113,53 +110,46 @@ def oauth_callback():
         print("❌ Erreur post-OAuth :", error_text)
         return f"<h2 style='color:red'>❌ Erreur post-OAuth : {error_text}</h2>"
 
-@app.route("/webhook", methods=["GET", "POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    if request.method == "GET":
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if mode == "subscribe" and token == os.getenv("WEBHOOK_VERIFY_TOKEN"):
-            return challenge, 200
-        return "Unauthorized", 403
+    # ✅ TEMP : on affiche juste le JSON brut (DM, commentaires, etc.)
+    data = request.get_json(force=True)
+    print("📩 Payload brut reçu :")
+    print(data)
+    return "ok", 200
 
-    # 🎯 Traitement du webhook POST
-    data = request.json
-    print("📩 Webhook reçu :", data)
-
+    # ✅ CODE DE TRAITEMENT NORMAL (EN COMMENTAIRE TEMPORAIRE)
+    """
     try:
         for entry in data.get("entry", []):
-            # Gestion des commentaires et posts Instagram (via 'changes')
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 field = change.get("field")
                 item = value.get("item")
 
-                # Commentaire Instagram
+                # Commentaire
                 if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
                     print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
 
-                # Nouveau post Instagram
+                # Nouveau post
                 elif item == "post" and value.get("verb") == "add":
                     instagram_id = entry.get("id")
                     media_id = value.get("post_id") or value.get("id")
                     print(f"🆕 Nouveau post détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
 
-            # Gestion des DMs Messenger / Instagram (via 'messaging')
-            for messaging_event in entry.get("messaging", []):
-                sender_id = messaging_event.get("sender", {}).get("id")
-                message_text = messaging_event.get("message", {}).get("text")
-                print(f"📥 Nouveau DM Messenger / Instagram de {sender_id} : {message_text}")
-
-                if sender_id and message_text:
-                    send_instagram_dm(sender_id, "Merci pour votre message !")
+                # DM Instagram (messages)
+                elif field == "messages":
+                    sender_id = value.get("sender", {}).get("id")
+                    message_text = value.get("message", {}).get("text")
+                    print(f"📥 Nouveau DM Instagram de {sender_id} : {message_text}")
+                    if sender_id and message_text:
+                        send_instagram_dm(sender_id, "Merci pour votre message !")
 
     except Exception as e:
         print("❌ Erreur dans le traitement du webhook :", str(e))
-
-    return "ok", 200
+    """
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
