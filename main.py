@@ -112,10 +112,6 @@ def root_fallback():
     data = request.get_json(force=True)
     print("📍 `/`")
 
-    def root_fallback():
-    data = request.get_json(force=True)
-    print("📍 `/`")
-
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
@@ -146,12 +142,7 @@ def webhook():
     print("📍 Requête `/webhook`")
 
 
-    for entry in data.get("entry", []):
         # DM Instagram détecté ici aussi
-        def root_fallback():
-    data = request.get_json(force=True)
-    print("📍 `/`")
-
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
