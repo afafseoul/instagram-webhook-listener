@@ -133,6 +133,8 @@ def root_fallback():
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
+                # ✅ Envoi automatique de réponse au DM Insta
+                send_instagram_dm(sender_id, "Hello 👋 Merci pour votre message !")
 
     return "ok", 200
 
