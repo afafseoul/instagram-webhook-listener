@@ -34,7 +34,7 @@ def send_instagram_dm(recipient_id, message_text):
     except Exception as e:
         print("❌ Erreur envoi DM :", e)
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def home():
     return "Webhook Listener OK", 200
 
