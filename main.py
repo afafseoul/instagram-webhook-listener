@@ -110,7 +110,7 @@ def oauth_callback():
 @app.route("/", methods=["POST"])
 def root_fallback():
     data = request.get_json(force=True)
-    print("📍"/")
+    print("📍 `/`")
 
     for entry in data.get("entry", []):
         if "messaging" in entry:
