@@ -161,15 +161,17 @@ def webhook():
             for change in entry["changes"]:
                 value = change.get("value", {})
                 field = change.get("field")
-                item = value.get("item")
-                if item == "comment":
+                if field == "comments":
                     instagram_id = entry.get("id")
-                    media_id = value.get("parent_id")
-                    print("🔍 Payload brut du commentaire :", value)
+                    media_id = value.get("media", {}).get("id")
+                    user_id = value.get("from", {}).get("id")
+                    username = value.get("from", {}).get("username")
                     text = value.get("text")
+                    print("🔍 Payload brut du commentaire :", value)
                     print("💬 [Commentaire détecté]")
                     print(f"👤 Compte IG  : {instagram_id}")
                     print(f"🖼️  Media ID   : {media_id}")
+                    print(f"👤 Auteur      : {username} (ID {user_id})")
                     print(f"💬 Texte       : {text}")
 
     return "ok", 200
