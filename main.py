@@ -112,15 +112,24 @@ def root_fallback():
     data = request.get_json(force=True)
     print("📍 `/`")
 
+    def root_fallback():
+    data = request.get_json(force=True)
+    print("📍 `/`")
+
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
-                sender_id = msg.get("sender", {}).get("id")
-                recipient_id = msg.get("recipient", {}).get("id")
+                sender = msg.get("sender", {})
+                recipient = msg.get("recipient", {})
                 message = msg.get("message", {})
                 text = message.get("text", "")
                 mid = message.get("mid", "")
                 timestamp = msg.get("timestamp")
+
+                sender_id = sender.get("id")
+                sender_username = sender.get("username", "inconnu")
+                recipient_id = recipient.get("id")
+                recipient_username = recipient.get("username", "inconnu")
 
                 print("📥 [DM reçu sur `/`]")
                 print(f"👤 De     : {sender_id} ({sender_username})")
@@ -135,21 +144,30 @@ def root_fallback():
 def webhook():
     data = request.get_json(force=True)
     print("📍 Requête `/webhook`")
-   
 
 
     for entry in data.get("entry", []):
         # DM Instagram détecté ici aussi
+        def root_fallback():
+    data = request.get_json(force=True)
+    print("📍 `/`")
+
+    for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
-                sender_id = msg.get("sender", {}).get("id")
-                recipient_id = msg.get("recipient", {}).get("id")
+                sender = msg.get("sender", {})
+                recipient = msg.get("recipient", {})
                 message = msg.get("message", {})
                 text = message.get("text", "")
                 mid = message.get("mid", "")
                 timestamp = msg.get("timestamp")
 
-                print("📥 [DM reçu sur `/webhook`]")
+                sender_id = sender.get("id")
+                sender_username = sender.get("username", "inconnu")
+                recipient_id = recipient.get("id")
+                recipient_username = recipient.get("username", "inconnu")
+
+                print("📥 [DM reçu sur `/`]")
                 print(f"👤 De     : {sender_id} ({sender_username})")
                 print(f"🎯 Vers   : {recipient_id} ({recipient_username})")
                 print(f"🕒 Time   : {timestamp}")
@@ -162,14 +180,15 @@ def webhook():
                 value = change.get("value", {})
                 field = change.get("field")
                 if field == "comments":
+                    print("💬 [Commentaire détecté] ", data) 
                     instagram_id = entry.get("id")
                     media_id = value.get("media", {}).get("id")
                     user_id = value.get("from", {}).get("id")
                     username = value.get("from", {}).get("username")
                     text = value.get("text")
-                    print("🔍 Payload brut du commentaire :", value)
-                    print("💬 [Commentaire détecté]")
-                    print(f"👤 Compte IG  : {instagram_id}")
+
+                    print("💬 [Commentaire détecté]") 
+                    print(f"👤 Compte IG   : {instagram_id} ")
                     print(f"🖼️  Media ID   : {media_id}")
                     print(f"👤 Auteur      : {username} (ID {user_id})")
                     print(f"💬 Texte       : {text}")
