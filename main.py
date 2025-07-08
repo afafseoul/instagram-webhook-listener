@@ -18,7 +18,6 @@ INSTAGRAM_DM_PAGE_TOKEN = os.getenv("INSTAGRAM_DM_PAGE_TOKEN")
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 def send_instagram_dm(recipient_id, message_text):
-    """Envoie un message DM Instagram via l'API Graph"""
     url = "https://graph.facebook.com/v19.0/me/messages"
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -27,7 +26,6 @@ def send_instagram_dm(recipient_id, message_text):
         "messaging_type": "RESPONSE"
     }
     params = {"access_token": INSTAGRAM_DM_PAGE_TOKEN}
-
     try:
         response = requests.post(url, params=params, json=payload, headers=headers)
         print("✅ DM envoyé :", response.status_code, response.text)
@@ -86,7 +84,6 @@ def oauth_callback():
             print(msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        # Souscription aux événements de la page (feed et messages)
         requests.post(
             f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps",
             params={"access_token": token, "subscribed_fields": "feed,messages"}
@@ -110,62 +107,69 @@ def oauth_callback():
         print("❌ Erreur post-OAuth :", error_text)
         return f"<h2 style='color:red'>❌ Erreur post-OAuth : {error_text}</h2>"
 
-@app.route("/webhook", methods=["POST"])
-
-@app.before_request
-def log_every_request():
-    if request.method == "POST":
-        print("🚨 Requête POST détectée")
-        print("➡️  Chemin :", request.path)
-        try:
-            data = request.get_json(force=True)
-            print("📩 Payload brut reçu :")
-            print(data)
-        except Exception as e:
-            print("⚠️ Aucune payload JSON ou erreur :", e)
-
-def webhook():
-    # ✅ Affiche la route exacte reçue par Flask
-    print("Requête reçue sur :", request.path)
-    
-    # ✅ Affiche le JSON brut reçu (quel que soit le type d’événement)
+@app.route("/", methods=["POST"])
+def root_fallback():
     data = request.get_json(force=True)
-    print("📩 Payload brut reçu :")
-    print(data)
+    print("📍 Requête reçue sur `/`")
+
+    for entry in data.get("entry", []):
+        if "messaging" in entry:
+            for msg in entry["messaging"]:
+                sender_id = msg.get("sender", {}).get("id")
+                recipient_id = msg.get("recipient", {}).get("id")
+                message = msg.get("message", {})
+                text = message.get("text", "")
+                mid = message.get("mid", "")
+                timestamp = msg.get("timestamp")
+
+                print("📥 [DM reçu sur `/`]")
+                print(f"👤 De     : {sender_id}")
+                print(f"🎯 Vers   : {recipient_id}")
+                print(f"🕒 Time   : {timestamp}")
+                print(f"💬 Texte  : {text}")
+                print(f"🆔 MID    : {mid}")
+
     return "ok", 200
 
-    # ✅ CODE DE TRAITEMENT NORMAL (EN COMMENTAIRE TEMPORAIRE)
-    """
-    try:
-        for entry in data.get("entry", []):
-            for change in entry.get("changes", []):
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(force=True)
+    print("📍 Requête reçue sur `/webhook`")
+
+    for entry in data.get("entry", []):
+        # DM Instagram détecté ici aussi
+        if "messaging" in entry:
+            for msg in entry["messaging"]:
+                sender_id = msg.get("sender", {}).get("id")
+                recipient_id = msg.get("recipient", {}).get("id")
+                message = msg.get("message", {})
+                text = message.get("text", "")
+                mid = message.get("mid", "")
+                timestamp = msg.get("timestamp")
+
+                print("📥 [DM reçu sur `/webhook`]")
+                print(f"👤 De     : {sender_id}")
+                print(f"🎯 Vers   : {recipient_id}")
+                print(f"🕒 Time   : {timestamp}")
+                print(f"💬 Texte  : {text}")
+                print(f"🆔 MID    : {mid}")
+
+        # Commentaires
+        if "changes" in entry:
+            for change in entry["changes"]:
                 value = change.get("value", {})
                 field = change.get("field")
                 item = value.get("item")
-
-                # Commentaire
                 if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
-                    print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
+                    text = value.get("text")
+                    print("💬 [Commentaire détecté]")
+                    print(f"👤 Compte IG  : {instagram_id}")
+                    print(f"🖼️  Media ID   : {media_id}")
+                    print(f"💬 Texte       : {text}")
 
-                # Nouveau post
-                elif item == "post" and value.get("verb") == "add":
-                    instagram_id = entry.get("id")
-                    media_id = value.get("post_id") or value.get("id")
-                    print(f"🆕 Nouveau post détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
-
-                # DM Instagram (messages)
-                elif field == "messages":
-                    sender_id = value.get("sender", {}).get("id")
-                    message_text = value.get("message", {}).get("text")
-                    print(f"📥 Nouveau DM Instagram de {sender_id} : {message_text}")
-                    if sender_id and message_text:
-                        send_instagram_dm(sender_id, "Merci pour votre message !")
-
-    except Exception as e:
-        print("❌ Erreur dans le traitement du webhook :", str(e))
-    """
+    return "ok", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
