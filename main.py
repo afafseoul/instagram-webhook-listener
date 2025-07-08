@@ -135,6 +135,8 @@ def root_fallback():
 def webhook():
     data = request.get_json(force=True)
     print("📍 Requête `/webhook`")
+    print("📦 Payload complet reçu :", data)
+
 
     for entry in data.get("entry", []):
         # DM Instagram détecté ici aussi
