@@ -44,7 +44,8 @@ def oauth_start():
         "instagram_manage_comments",
         "pages_manage_metadata",
         "pages_read_engagement",
-        "pages_read_user_content"
+        "pages_read_user_content",
+        "pages_messaging"
     ])
     return redirect(
         f"https://www.facebook.com/v19.0/dialog/oauth?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&response_type=code&state=123"
@@ -84,10 +85,10 @@ def oauth_callback():
             print(msg)
             return f"<h2 style='color:red'>{msg}</h2>"
 
-        # Souscription aux événements de la page (feed)
+        # Souscription aux événements de la page (feed et messages d'un coup)
         requests.post(
             f"https://graph.facebook.com/v19.0/{page_id}/subscribed_apps",
-            params={"access_token": token, "subscribed_fields": "feed"}
+            params={"access_token": token, "subscribed_fields": "feed,messages"}
         )
 
         supabase.table("instagram_tokens").insert({
@@ -124,31 +125,33 @@ def webhook():
 
     try:
         for entry in data.get("entry", []):
+            # Gestion des commentaires et posts Instagram (via 'changes')
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 field = change.get("field")
                 item = value.get("item")
 
-                # Commentaire
+                # Commentaire Instagram
                 if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
                     print(f"📣 Nouveau commentaire détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
 
-                # Nouveau post
+                # Nouveau post Instagram
                 elif item == "post" and value.get("verb") == "add":
                     instagram_id = entry.get("id")
                     media_id = value.get("post_id") or value.get("id")
                     print(f"🆕 Nouveau post détecté sur le compte Instagram {instagram_id} - Post : {media_id}")
 
-                # DM Instagram (messages)
-                elif field == "messages":
-                    sender_id = value.get("sender", {}).get("id")
-                    message_text = value.get("message", {}).get("text")
-                    print(f"📥 Nouveau DM Instagram de {sender_id} : {message_text}")
+            # Gestion des DMs Messenger / Instagram (via 'messaging')
+            for messaging_event in entry.get("messaging", []):
+                sender_id = messaging_event.get("sender", {}).get("id")
+                message_text = messaging_event.get("message", {}).get("text")
+                print(f"📥 Nouveau DM Messenger / Instagram de {sender_id} : {message_text}")
 
-                    if sender_id and message_text:
-                        send_instagram_dm(sender_id, "Merci pour votre message !")
+                if sender_id and message_text:
+                    send_instagram_dm(sender_id, "Merci pour votre message !")
+
     except Exception as e:
         print("❌ Erreur dans le traitement du webhook :", str(e))
 
