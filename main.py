@@ -123,8 +123,8 @@ def root_fallback():
                 timestamp = msg.get("timestamp")
 
                 print("📥 [DM reçu sur `/`]")
-                print(f"👤 De     : {sender_id}")
-                print(f"🎯 Vers   : {recipient_id}")
+                print(f"👤 De     : {sender_id} ({sender_username})")
+                print(f"🎯 Vers   : {recipient_id} ({recipient_username})")
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
@@ -150,8 +150,8 @@ def webhook():
                 timestamp = msg.get("timestamp")
 
                 print("📥 [DM reçu sur `/webhook`]")
-                print(f"👤 De     : {sender_id}")
-                print(f"🎯 Vers   : {recipient_id}")
+                print(f"👤 De     : {sender_id} ({sender_username})")
+                print(f"🎯 Vers   : {recipient_id} ({recipient_username})")
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
