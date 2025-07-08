@@ -110,7 +110,7 @@ def oauth_callback():
 @app.route("/", methods=["POST"])
 def root_fallback():
     data = request.get_json(force=True)
-    print("📍 Requête reçue sur `/`")
+    print("📍"/")
 
     for entry in data.get("entry", []):
         if "messaging" in entry:
@@ -134,7 +134,7 @@ def root_fallback():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
-    print("📍 Requête reçue sur `/webhook`")
+    print("📍 Requête `/webhook`")
 
     for entry in data.get("entry", []):
         # DM Instagram détecté ici aussi
@@ -163,6 +163,7 @@ def webhook():
                 if item == "comment":
                     instagram_id = entry.get("id")
                     media_id = value.get("parent_id")
+                    print("🔍 Payload brut du commentaire :", value)
                     text = value.get("text")
                     print("💬 [Commentaire détecté]")
                     print(f"👤 Compte IG  : {instagram_id}")
