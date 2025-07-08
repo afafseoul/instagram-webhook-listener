@@ -115,7 +115,6 @@ def root_fallback():
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
-                print(data)
                 sender = msg.get("sender", {})
                 recipient = msg.get("recipient", {})
                 message = msg.get("message", {})
@@ -129,8 +128,8 @@ def root_fallback():
                 recipient_username = recipient.get("username", "inconnu")
 
                 print("📥 [DM reçu sur `/`]")
-                print(f"👤 De     : {sender_id} ({sender_username})")
-                print(f"🎯 Vers   : {recipient_id} ({recipient_username})")
+                print(f"👤 De     : {sender_id} ")
+                print(f"🎯 Vers   : {recipient_id} ")
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
@@ -160,8 +159,8 @@ def webhook():
                 recipient_username = recipient.get("username", "inconnu")
 
                 print("📥 [DM reçu sur `/`]")
-                print(f"👤 De     : {sender_id} ({sender_username})")
-                print(f"🎯 Vers   : {recipient_id} ({recipient_username})")
+                print(f"👤 De     : {sender_id} ")
+                print(f"🎯 Vers   : {recipient_id} ")
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
