@@ -112,7 +112,10 @@ def oauth_callback():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # ✅ TEMP : on affiche juste le JSON brut (DM, commentaires, etc.)
+    # ✅ Affiche la route exacte reçue par Flask
+    print("Requête reçue sur :", request.path)
+    
+    # ✅ Affiche le JSON brut reçu (quel que soit le type d’événement)
     data = request.get_json(force=True)
     print("📩 Payload brut reçu :")
     print(data)
