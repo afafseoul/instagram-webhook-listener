@@ -133,7 +133,6 @@ def root_fallback():
                 print(f"🕒 Time   : {timestamp}")
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
-                # ✅ Envoi automatique de réponse au DM Insta
                 send_instagram_dm(sender_id, "Hello 👋 Merci pour votre message !")
 
     return "ok", 200
@@ -143,8 +142,6 @@ def webhook():
     data = request.get_json(force=True)
     print("📍 Requête `/webhook`")
 
-
-        # DM Instagram détecté ici aussi
     for entry in data.get("entry", []):
         if "messaging" in entry:
             for msg in entry["messaging"]:
@@ -167,7 +164,6 @@ def webhook():
                 print(f"💬 Texte  : {text}")
                 print(f"🆔 MID    : {mid}")
 
-        # Commentaires
         if "changes" in entry:
             for change in entry["changes"]:
                 value = change.get("value", {})
@@ -178,6 +174,7 @@ def webhook():
                     user_id = value.get("from", {}).get("id")
                     username = value.get("from", {}).get("username")
                     text = value.get("text")
+                    comment_id = value.get("id")
 
                     print("💬 [Commentaire détecté]") 
                     print(f"👤 Compte IG   : {instagram_id} ")
@@ -185,17 +182,21 @@ def webhook():
                     print(f"👤 Auteur      : {username} (ID {user_id})")
                     print(f"💬 Texte       : {text}")
 
-                     # ✅ Répondre automatiquement au commentaire
-                    reply_url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
-                    reply_payload = {
-                        "message": "Hello 👋",
-                        "access_token": INSTAGRAM_DM_PAGE_TOKEN
-                    }
-                    try:
-                        reply_res = requests.post(reply_url, params=reply_payload)
-                        print(f"✅ Réponse envoyée au commentaire {comment_id} :", reply_res.status_code, reply_res.text)
-                    except Exception as e:
-                        print("❌ Erreur envoi réponse :", e)
+                    result = supabase.table("instagram_tokens").select("access_token").eq("instagram_id", instagram_id).execute()
+                    if result.data:
+                        token = result.data[0]["access_token"]
+                        reply_url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
+                        reply_payload = {
+                            "message": "Hello 👋",
+                            "access_token": token
+                        }
+                        try:
+                            reply_res = requests.post(reply_url, params=reply_payload)
+                            print(f"✅ Réponse envoyée au commentaire {comment_id} :", reply_res.status_code, reply_res.text)
+                        except Exception as e:
+                            print("❌ Erreur envoi réponse :", e)
+                    else:
+                        print(f"❌ Aucun token trouvé pour Instagram ID {instagram_id}")
 
     return "ok", 200
 
