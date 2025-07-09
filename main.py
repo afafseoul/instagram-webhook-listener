@@ -182,7 +182,7 @@ def webhook():
                     print(f"👤 Auteur      : {username} (ID {user_id})")
                     print(f"💬 Texte       : {text}")
 
-                    result = supabase.table("instagram_tokens").select("access_token").eq("instagram_id", instagram_id).execute()
+                    '''result = supabase.table("instagram_tokens").select("access_token").eq("instagram_id", instagram_id).execute()
                     if result.data:
                         token = result.data[0]["access_token"]
                         reply_url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
@@ -196,7 +196,7 @@ def webhook():
                         except Exception as e:
                             print("❌ Erreur envoi réponse :", e)
                     else:
-                        print(f"❌ Aucun token trouvé pour Instagram ID {instagram_id}")
+                        print(f"❌ Aucun token trouvé pour Instagram ID {instagram_id}")'''
 
     return "ok", 200
 
