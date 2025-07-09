@@ -185,6 +185,18 @@ def webhook():
                     print(f"👤 Auteur      : {username} (ID {user_id})")
                     print(f"💬 Texte       : {text}")
 
+                     # ✅ Répondre automatiquement au commentaire
+                    reply_url = f"https://graph.facebook.com/v19.0/{comment_id}/replies"
+                    reply_payload = {
+                        "message": "Hello 👋",
+                        "access_token": INSTAGRAM_DM_PAGE_TOKEN
+                    }
+                    try:
+                        reply_res = requests.post(reply_url, params=reply_payload)
+                        print(f"✅ Réponse envoyée au commentaire {comment_id} :", reply_res.status_code, reply_res.text)
+                    except Exception as e:
+                        print("❌ Erreur envoi réponse :", e)
+
     return "ok", 200
 
 if __name__ == "__main__":
